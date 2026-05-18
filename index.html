@@ -579,6 +579,7 @@ table { min-width: 100%; }
       <div class="nav-grp">Finance</div>
       <div class="ni" data-p="partners"    onclick="go('partners')">   <span class="ni-ic">🤝</span>Partners</div>
       <div class="ni" data-p="profit"      onclick="go('profit')">     <span class="ni-ic">📈</span>Profit</div>
+      <div class="ni" data-p="audit"       onclick="go('audit')">      <span class="ni-ic">🧾</span>Audit</div>
       <div class="ni" data-p="reports"     onclick="go('reports')">    <span class="ni-ic">📄</span>Reports</div>
       <div class="nav-grp admin-only">Admin</div>
       <div class="ni admin-only" data-p="users"   onclick="go('users')">   <span class="ni-ic">🔐</span>Users</div>
@@ -672,7 +673,7 @@ const rll = r => ({admin:'Administrator',partner:'Partner',staff:'Staff'}[r]||r)
 const isAdmin = () => CU && CU.role === 'admin';
 const isPart  = () => CU && ['admin','partner'].includes(CU.role);
 const pgNames = {dashboard:'Dashboard',customers:'Customers',loans:'Loans',
-  collections:'Collections',partners:'Partners',profit:'Profit',
+  collections:'Collections',partners:'Partners',profit:'Profit', audit:'Audit Reports',
   reports:'Reports',users:'User Management',actlogs:'Activity Logs',
   backup:'Backup',settings:'Settings'};
 
@@ -765,7 +766,7 @@ async function loadAll() {
 
     db.users       = (u.data  || []);
     db.customers   = (c.data  || []);
-    db.collections = (co.data || []);
+    db.collections = (co.data || []).map(function(c){ c.by = c.created_by || c.by || ''; return c; });
     db.partners    = (p.data  || []);
     db.logs        = (lg.data || []);
 
@@ -958,7 +959,7 @@ function go(page){
   document.getElementById('tbtl').textContent=pgNames[page]||page;
   closeSB(); document.getElementById('gsi').value='';
   ({dashboard:pgDash,customers:pgCust,loans:pgLoans,collections:pgColl,
-    partners:pgPart,profit:pgProfit,reports:pgRep,users:pgUsers,
+    partners:pgPart,profit:pgProfit,audit:pgAudit,reports:pgRep,users:pgUsers,
     actlogs:pgLogs,backup:pgBackup,settings:pgSet}[page]||pgDash)();
 }
 function setAct(p){
@@ -1828,7 +1829,7 @@ function pgLogs(fa='',fu=''){
   if(fu)logs=logs.filter(l=>l.uid===fu);
   const uOpts=db.users.map(u=>'<option value="'+u.id+'" '+(fu===u.id?'selected':'')+'>'+u.name+'</option>').join('');
   let html='<div class="shead"><div><div class="sti">📝 Activity Logs</div><div class="ssu">'+db.logs.length+' total records</div></div>'
-  +'<div style="display:flex;gap:8px"><button class="btn btn-s btn-sm" onclick="exportLogs()">Export CSV</button><button class="btn btn-d btn-sm" onclick="clearLogs()">Clear Old</button></div></div>'
+  +'<div style="display:flex;gap:8px"><button class="btn btn-s btn-sm" onclick="exportLogs()">Export CSV</button><button class="btn btn-p btn-sm" onclick="restoreLogs()">Restore Logs</button><button class="btn btn-d btn-sm" onclick="clearLogs()">Clear Old</button></div></div>'
   +'<div class="stats" style="margin-bottom:12px">'
   +'<div class="stat green"><div class="stat-lbl">Collections</div><div class="stat-val cg">'+db.logs.filter(l=>l.action==='collection').length+'</div></div>'
   +'<div class="stat blue"><div class="stat-lbl">Loans</div><div class="stat-val cb">'+db.logs.filter(l=>l.action==='loan').length+'</div></div>'
@@ -1869,14 +1870,27 @@ function exportLogs(){
   toast('Logs exported','success');
 }
 
-function clearLogs(){
-  cConfirm('Delete logs older than 30 days?', function(){
-    var cut=aD(td(),-30), before=db.logs.length;
-    db.logs=db.logs.filter(function(l){return l.ts.slice(0,10)>=cut;});
-    saveDB();
+async function clearLogs() {
+  cConfirm('Delete logs older than 30 days?', async function() {
+    var cut = aD(td(),-30);
+    var before = db.logs.length;
+    await SB.from('logs').delete().lt('created_at', new Date(cut).toISOString());
+    db.logs = db.logs.filter(function(l){ return l.ts && l.ts.slice(0,10) >= cut; });
     toast('Cleared '+(before-db.logs.length)+' old logs','info');
     pgLogs();
   });
+}
+
+async function restoreLogs() {
+  if (!isAdmin()) return;
+  showLoader(true);
+  try {
+     var r = await SB.from('logs').select('*').order('created_at', {ascending:false});
+     if (r.data) db.logs = r.data;
+     toast('All historical logs restored from database', 'success');
+     pgLogs();
+  } catch(e) { toast('Error restoring logs', 'error'); }
+  showLoader(false);
 }
 
 function pgCust(s){
@@ -2015,28 +2029,21 @@ function onLT(){
     document.getElementById('lDU').textContent=durs[t]||'(Days)';
     document.getElementById('lEG').style.display=t==='emi'?'':'none';
     document.getElementById('lInt').readOnly=t==='emi';
-    // Auto-fill interest 10% and DC 1% for daily/weekly when amount changes
-    if(t==='daily'||t==='weekly'){
-      const amt=+document.getElementById('lAmt').value||0;
-      const curInt=document.getElementById('lInt').value;
-      const curDC=document.getElementById('lDC').value;
-      if(amt>0&&(!curInt||curInt==='0'))document.getElementById('lInt').value=Math.round(amt*0.10);
-      if(amt>0&&(!curDC||curDC==='0'))document.getElementById('lDC').value=Math.round(amt*0.01);
-    }
+    document.getElementById('lInt').dataset.manual='0';
+    document.getElementById('lDC').dataset.manual='0';
   }
   calcL();
 }
 
 function calcL(){
   const t=document.getElementById('lType').value;
-  // Auto-fill 10% interest and 1% DC for daily/weekly if fields are empty
   if((t==='daily'||t==='weekly')){
     const _a=+document.getElementById('lAmt').value||0;
     const _iEl=document.getElementById('lInt'),_dEl=document.getElementById('lDC');
-    if(_a>0&&_iEl&&(!_iEl.value||_iEl.value==='0'||_iEl.dataset.auto==='1')){_iEl.value=Math.round(_a*0.10);_iEl.dataset.auto='1';}
-    if(_a>0&&_dEl&&(!_dEl.value||_dEl.value==='0'||_dEl.dataset.auto==='1')){_dEl.value=Math.round(_a*0.01);_dEl.dataset.auto='1';}
-    if(_iEl)_iEl.addEventListener('input',()=>_iEl.dataset.auto='0',{once:true});
-    if(_dEl)_dEl.addEventListener('input',()=>_dEl.dataset.auto='0',{once:true});
+    if(_iEl && !_iEl.hasAttribute('data-bound')) { _iEl.setAttribute('data-bound','1'); _iEl.addEventListener('input', ()=>_iEl.dataset.manual='1'); }
+    if(_dEl && !_dEl.hasAttribute('data-bound')) { _dEl.setAttribute('data-bound','1'); _dEl.addEventListener('input', ()=>_dEl.dataset.manual='1'); }
+    if(_a>0&&_iEl&&_iEl.dataset.manual!=='1'){_iEl.value=Math.round(_a*0.10);}
+    if(_a>0&&_dEl&&_dEl.dataset.manual!=='1'){_dEl.value=Math.round(_a*0.01);}
   }
   const amt=+document.getElementById('lAmt').value||0,
     int=+document.getElementById('lInt').value||0,dc=+document.getElementById('lDC').value||0,
@@ -2144,11 +2151,12 @@ function onTUSelect(){
   if(!lid)return;
   const l=db.loans.find(x=>x.id===lid);
   if(!l)return;
-  // Prefill type, duration from original loan
   if(!document.getElementById('tuType').value){
     document.getElementById('tuType').value=l.tp;
   }
   document.getElementById('tuDur').value=l.dur;
+  document.getElementById('tuInt').dataset.manual='0';
+  document.getElementById('tuDC').dataset.manual='0';
   calcTU();
 }
 
@@ -2157,14 +2165,13 @@ function calcTU(){
   const tp2=document.getElementById('tuType')&&document.getElementById('tuType').value;
   const orig=lid?db.loans.find(x=>x.id===lid):null;
   const effectiveType=tp2||(orig&&orig.tp)||'';
-  // Auto-fill 10% interest / 1% DC for daily/weekly
   if(effectiveType==='daily'||effectiveType==='weekly'){
     const _a=+document.getElementById('tuAmt').value||0;
     const _iEl=document.getElementById('tuInt'),_dEl=document.getElementById('tuDC');
-    if(_a>0&&_iEl&&(!_iEl.value||_iEl.value==='0'||_iEl.dataset.auto==='1')){_iEl.value=Math.round(_a*0.10);_iEl.dataset.auto='1';}
-    if(_a>0&&_dEl&&(!_dEl.value||_dEl.value==='0'||_dEl.dataset.auto==='1')){_dEl.value=Math.round(_a*0.01);_dEl.dataset.auto='1';}
-    if(_iEl&&!_iEl._lh){_iEl._lh=1;_iEl.addEventListener('input',()=>{_iEl.dataset.auto='0';},{once:true});}
-    if(_dEl&&!_dEl._lh){_dEl._lh=1;_dEl.addEventListener('input',()=>{_dEl.dataset.auto='0';},{once:true});}
+    if(_iEl && !_iEl.hasAttribute('data-bound')) { _iEl.setAttribute('data-bound','1'); _iEl.addEventListener('input', ()=>_iEl.dataset.manual='1'); }
+    if(_dEl && !_dEl.hasAttribute('data-bound')) { _dEl.setAttribute('data-bound','1'); _dEl.addEventListener('input', ()=>_dEl.dataset.manual='1'); }
+    if(_a>0&&_iEl&&_iEl.dataset.manual!=='1'){_iEl.value=Math.round(_a*0.10);}
+    if(_a>0&&_dEl&&_dEl.dataset.manual!=='1'){_dEl.value=Math.round(_a*0.01);}
   }
   const amt  = +document.getElementById('tuAmt').value||0;
   const int  = +document.getElementById('tuInt').value||0;
@@ -2486,6 +2493,68 @@ function pgProfit(){
     db.collections.forEach(c=>{if(c.pen)penM[new Date(c.date).getMonth()]+=Number(c.pen);});
     new Chart(document.getElementById('pch2'),{type:'bar',data:{labels:mo,datasets:[{label:'Interest',data:intM,backgroundColor:'rgba(245,200,66,.7)'},{label:'DC',data:dcM,backgroundColor:'rgba(255,107,53,.7)'},{label:'Penalty',data:penM,backgroundColor:'rgba(255,71,87,.7)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8a9bbf',font:{size:9},padding:8,boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:'#8a9bbf'},grid:{display:false}},y:{stacked:true,ticks:{color:'#8a9bbf',callback:v=>'₹'+v.toLocaleString('en-IN')},grid:{color:'rgba(255,255,255,.05)'}}}}});
   },80);
+}
+
+function pgAudit(mode) {
+  if(!isAdmin() && !isPart()) { permDenied(); return; }
+  mode = mode || 'monthly';
+  let mSel = document.getElementById('audM') ? document.getElementById('audM').value : td().slice(0,7);
+  let ySel = document.getElementById('audY') ? document.getElementById('audY').value : td().slice(0,4);
+  let d1 = document.getElementById('audD1') ? document.getElementById('audD1').value : aD(td(),-30);
+  let d2 = document.getElementById('audD2') ? document.getElementById('audD2').value : td();
+  
+  let lFilt = [], cFilt = [];
+  if(mode === 'monthly') {
+     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(mSel));
+     cFilt = db.collections.filter(c => (c.date||'').startsWith(mSel));
+  } else if(mode === 'yearly') {
+     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(ySel));
+     cFilt = db.collections.filter(c => (c.date||'').startsWith(ySel));
+  } else if(mode === 'custom') {
+     lFilt = db.loans.filter(l => {let d=(l.on||l.sd||''); return d>=d1 && d<=d2;});
+     cFilt = db.collections.filter(c => {let d=(c.date||''); return d>=d1 && d<=d2;});
+  }
+
+  const disb = lFilt.reduce((s,l)=>s+Number(l.amt),0);
+  const expectedInt = lFilt.reduce((s,l)=>s+Number(l.int||0),0);
+  const expectedDc = lFilt.reduce((s,l)=>s+Number(l.dc||0),0);
+  
+  const collAmt = cFilt.reduce((s,c)=>s+Number(c.amt||0),0);
+  const collPen = cFilt.reduce((s,c)=>s+Number(c.pen||0),0);
+
+  let html = '<div class="shead"><div class="sti">🧾 Audit Reports</div></div>';
+  html += '<div class="pills">'
+    +'<span class="pill '+(mode==='monthly'?'on':'')+'" onclick="pgAudit(\'monthly\')">Monthly</span>'
+    +'<span class="pill '+(mode==='yearly'?'on':'')+'" onclick="pgAudit(\'yearly\')">Yearly</span>'
+    +'<span class="pill '+(mode==='custom'?'on':'')+'" onclick="pgAudit(\'custom\')">Custom Date</span>'
+    +'</div>';
+
+  html += '<div class="tc" style="padding:14px;display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;background:var(--card);flex-wrap:wrap">';
+  if(mode==='monthly') {
+     html += '<div class="fg"><label>SELECT MONTH</label><input type="month" id="audM" value="'+mSel+'" onchange="pgAudit(\'monthly\')"></div>';
+  } else if(mode==='yearly') {
+     html += '<div class="fg"><label>SELECT YEAR</label><input type="number" id="audY" value="'+ySel+'" min="2020" max="2050" onchange="pgAudit(\'yearly\')"></div>';
+  } else {
+     html += '<div class="fg"><label>START DATE</label><input type="date" id="audD1" value="'+d1+'" onchange="pgAudit(\'custom\')"></div>';
+     html += '<div class="fg"><label>END DATE</label><input type="date" id="audD2" value="'+d2+'" onchange="pgAudit(\'custom\')"></div>';
+  }
+  html += '</div>';
+
+  html += '<div class="stats">';
+  html += '<div class="stat blue"><div class="stat-lbl">Loans Disbursed</div><div class="stat-val cb">'+R(disb)+'</div></div>';
+  html += '<div class="stat gold"><div class="stat-lbl">Interest (Expected)</div><div class="stat-val cgo">'+R(expectedInt)+'</div></div>';
+  html += '<div class="stat orange"><div class="stat-lbl">DC (Expected)</div><div class="stat-val co">'+R(expectedDc)+'</div></div>';
+  html += '<div class="stat green"><div class="stat-lbl">Total Collected</div><div class="stat-val cg">'+R(collAmt)+'</div></div>';
+  html += '<div class="stat red"><div class="stat-lbl">Penalty Collected</div><div class="stat-val cr">'+R(collPen)+'</div></div>';
+  html += '<div class="stat purple"><div class="stat-lbl">Total Income</div><div class="stat-val cp">'+R(expectedInt+expectedDc+collPen)+'</div></div>';
+  html += '</div>';
+  
+  html += '<div class="tc"><div class="th"><div class="tt">Activity in Period</div></div><div class="ts"><table><thead><tr><th>Type</th><th>Count</th><th>Total Value</th></tr></thead><tbody>';
+  html += '<tr><td>Loans Disbursed</td><td style="font-weight:700">'+lFilt.length+'</td><td class="am" style="color:var(--blue)">'+R(disb)+'</td></tr>';
+  html += '<tr><td>Collections Recorded</td><td style="font-weight:700">'+cFilt.length+'</td><td class="am" style="color:var(--green)">'+R(collAmt)+'</td></tr>';
+  html += '</tbody></table></div></div>';
+
+  document.getElementById('pg').innerHTML = html;
 }
 
 function pgRep(){
