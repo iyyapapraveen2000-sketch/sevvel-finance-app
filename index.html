@@ -1013,14 +1013,16 @@ async function saveCust(eid) {
     if (obj2) { updates.doc2=obj2.b; updates.doc2_name=obj2.n; updates.doc2_type=obj2.t; }
 
     if (eid) {
-      await sbUpdate('customers', eid, updates);
+      var ok = await sbUpdate('customers', eid, updates);
+      if (!ok) { showLoader(false); return; } // STOPS if Supabase fails
       var cc = db.customers.find(function(x){return x.id===eid;});
       if (cc) Object.assign(cc, updates);
       addLog('customer','Updated customer '+name,'ID: '+eid);
     } else {
       var newId = genSafeId('C', db.customers);
       updates.id = newId;
-      await sbInsert('customers', updates);
+      var ok = await sbInsert('customers', updates);
+      if (!ok) { showLoader(false); return; } // STOPS if Supabase fails
       updates.on = td();
       db.customers.push(updates);
       addLog('customer','Added customer '+name,'ID: '+newId);
@@ -2524,7 +2526,8 @@ function pgAudit(mode) {
   const collAmt = cFilt.reduce((s,c)=>s+Number(c.amt||0),0);
   const collPen = cFilt.reduce((s,c)=>s+Number(c.pen||0),0);
 
-  let html = '<div class="shead"><div class="sti">🧾 Audit Reports</div></div>';
+  let html = '<div class="shead"><div><div class="sti">🧾 Audit Reports</div><div class="ssu">Detailed financial breakdown</div></div>'
+    +'<button class="btn btn-p" onclick="downloadAuditPDF(\''+mode+'\')">📄 Download PDF</button></div>';
   html += '<div class="pills">'
     +'<span class="pill '+(mode==='monthly'?'on':'')+'" onclick="pgAudit(\'monthly\')">Monthly</span>'
     +'<span class="pill '+(mode==='yearly'?'on':'')+'" onclick="pgAudit(\'yearly\')">Yearly</span>'
@@ -2560,6 +2563,65 @@ function pgAudit(mode) {
   html += '</div></div>';
 
   document.getElementById('pg').innerHTML = html;
+}
+
+function downloadAuditPDF(mode) {
+  let mSel = document.getElementById('audM') ? document.getElementById('audM').value : td().slice(0,7);
+  let ySel = document.getElementById('audY') ? document.getElementById('audY').value : td().slice(0,4);
+  let d1 = document.getElementById('audD1') ? document.getElementById('audD1').value : aD(td(),-30);
+  let d2 = document.getElementById('audD2') ? document.getElementById('audD2').value : td();
+  
+  let lFilt = [];
+  let periodTitle = '';
+  if(mode === 'monthly') {
+     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(mSel));
+     periodTitle = 'Monthly Audit - ' + mSel;
+  } else if(mode === 'yearly') {
+     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(ySel));
+     periodTitle = 'Yearly Audit - ' + ySel;
+  } else if(mode === 'custom') {
+     lFilt = db.loans.filter(l => {let d=(l.on||l.sd||'').slice(0,10); return d>=d1 && d<=d2;});
+     periodTitle = 'Custom Audit (' + d1 + ' to ' + d2 + ')';
+  }
+
+  let tableRows = '';
+  let totAmt=0, totPaid=0, totBal=0;
+
+  lFilt.forEach(l => {
+     let col = db.collections.filter(c => c.lid === l.id).reduce((s,c) => s+Number(c.amt||0), 0);
+     let bal = Math.max(0, l.amt - col);
+     totAmt += l.amt; totPaid += col; totBal += bal;
+     tableRows += '<tr>'
+       +'<td style="padding:8px;border:1px solid #ddd">'+(l.on||l.sd)+'</td>'
+       +'<td style="padding:8px;border:1px solid #ddd;font-family:monospace;color:#0099ff">'+l.id+'</td>'
+       +'<td style="padding:8px;border:1px solid #ddd"><strong>'+l.cn+'</strong></td>'
+       +'<td style="padding:8px;border:1px solid #ddd;text-align:right">₹'+l.amt.toLocaleString('en-IN')+'</td>'
+       +'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:green;font-weight:bold">₹'+col.toLocaleString('en-IN')+'</td>'
+       +'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:red;font-weight:bold">₹'+bal.toLocaleString('en-IN')+'</td>'
+     +'</tr>';
+  });
+
+  tableRows += '<tr style="font-weight:900;background:#f5f5f5;font-size:16px">'
+    +'<td colspan="3" style="padding:12px;border:1px solid #ddd;text-align:right">TOTALS</td>'
+    +'<td style="padding:12px;border:1px solid #ddd;text-align:right">₹'+totAmt.toLocaleString('en-IN')+'</td>'
+    +'<td style="padding:12px;border:1px solid #ddd;text-align:right;color:green">₹'+totPaid.toLocaleString('en-IN')+'</td>'
+    +'<td style="padding:12px;border:1px solid #ddd;text-align:right;color:red">₹'+totBal.toLocaleString('en-IN')+'</td>'
+  +'</tr>';
+
+  let printWindow = window.open('', '_blank');
+  let htmlDoc = '<html><head><title>Audit Report - Sevvel Finance</title>'
+    +'<style>body{font-family:Arial,sans-serif;padding:30px;color:#333} h2{color:#00d4aa;margin-bottom:5px} table{width:100%;border-collapse:collapse;margin-top:25px;font-size:14px} th{background:#111520;color:#fff;padding:12px;text-align:left;border:1px solid #444} td{border:1px solid #ddd}</style>'
+    +'</head><body>'
+    +'<h2>Sevvel Finance - Detailed Audit Report</h2>'
+    +'<p style="margin:0"><strong>Period:</strong> '+periodTitle+'</p>'
+    +'<p style="margin:5px 0 0 0"><strong>Generated On:</strong> '+new Date().toLocaleString()+'</p>'
+    +'<table><thead><tr><th>Date Disbursed</th><th>Loan ID</th><th>Customer Name</th><th style="text-align:right">Loan Amount</th><th style="text-align:right">Paid Up To Now</th><th style="text-align:right">Pending Balance</th></tr></thead>'
+    +'<tbody>'+tableRows+'</tbody></table>'
+    +'<script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); };</script>'
+    +'</body></html>';
+    
+  printWindow.document.write(htmlDoc);
+  printWindow.document.close();
 }
 
 function pgRep(){
