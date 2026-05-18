@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -468,7 +468,7 @@ table { min-width: 100%; }
 /* Modal full-screen on small phones */
 @media(max-width: 480px){
   .modal { 
-    max-height: 85dvh; 
+    max-height: 95vh; 
     margin: 10px 8px;
     border-radius: 16px;
   }
@@ -503,14 +503,6 @@ table { min-width: 100%; }
   .sess span { display: none; }
 }
 
-/* ── PARTNER GRID & MODAL BUTTON FIXES ── */
-.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-bottom: 20px; }
-.pcard { background: var(--card); border: 1px solid var(--bdr); border-radius: var(--rad); padding: 20px; position: relative; }
-.pmini { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; background: var(--bg2); padding: 12px; border-radius: 8px; }
-.pst-l { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
-.pst-v { font-size: 16px; font-weight: 800; }
-.mft { flex-shrink: 0; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
-
 </style>
 <style>
 /* ── APP LOADER ── */
@@ -530,11 +522,13 @@ table { min-width: 100%; }
 </head>
 <body>
 
+<!-- APP LOADER -->
 <div id="appLoader">
   <div class="ld-spin"></div>
   <div class="ld-txt">Loading Sevvel Finance...</div>
 </div>
 
+<!-- LOGIN -->
 <div id="loginPg">
   <div class="login-wrap">
     <div class="login-card">
@@ -560,6 +554,7 @@ table { min-width: 100%; }
   </div>
 </div>
 
+<!-- SHELL -->
 <div id="shell">
   <div class="ov" id="ov" onclick="closeSB()"></div>
   <nav class="sb" id="sb">
@@ -604,7 +599,6 @@ table { min-width: 100%; }
         <div class="sess-dot"></div>
         <span id="sessNm">user</span>
       </div>
-      <button class="logout-btn" onclick="logout()" title="Logout" style="margin-left: 8px;">⏻</button>
     </div>
     <div class="pg" id="pg"></div>
   </main>
@@ -643,17 +637,6 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const { createClient } = supabase;
 const SB = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-// ── SMART ID GENERATOR ──
-function genSafeId(prefix, list) {
-  if(!list || list.length === 0) return prefix + '001';
-  var max = 0;
-  for(var i=0; i<list.length; i++) {
-    var num = parseInt(list[i].id.replace(prefix, ''), 10);
-    if(!isNaN(num) && num > max) max = num;
-  }
-  return prefix + String(max + 1).padStart(3, '0');
-}
-
 // ── HELPERS ──────────────────────────────────────────────────
 const R   = v => '₹' + Number(v||0).toLocaleString('en-IN');
 const td  = () => new Date().toISOString().slice(0,10);
@@ -684,6 +667,7 @@ let CU = null;
 // ── SUPABASE HELPERS ─────────────────────────────────────────
 async function sbInsert(table, row) {
   try {
+    // Convert to plain JSON-safe object
     var plain = JSON.parse(JSON.stringify(row));
     var res = await SB.from(table).insert(plain);
     if (res && res.error) {
@@ -765,6 +749,7 @@ async function loadAll() {
     db.partners    = (p.data  || []);
     db.logs        = (lg.data || []);
 
+    // Map loans: DB columns -> UI cache fields
     db.loans = (l.data || []).map(function(row) {
       var schVal = row.sch;
       var schArr = [];
@@ -776,14 +761,14 @@ async function loadAll() {
         cn:         row.cn,
         tp:         row.tp,
         amt:        Number(row.amt   || 0),
-        int:        Number(row.interest || 0),
+        int:        Number(row.interest || 0),  // DB: interest -> UI: int
         dc:         Number(row.dc    || 0),
         dis:        Number(row.dis   || 0),
         dur:        Number(row.dur   || 0),
         sd:         row.sd  || '',
         md:         row.md  || '',
         st:         row.st  || 'active',
-        col:        Number(row.collected || 0),
+        col:        Number(row.collected || 0), // DB: collected -> UI: col
         emi:        row.emi ? Number(row.emi) : null,
         sch:        schArr,
         topupOf:    row.topup_of    || null,
@@ -863,6 +848,7 @@ function addLog(action, msg, detail) {
     };
     db.logs.unshift(entry);
     if (db.logs.length > 500) db.logs = db.logs.slice(0, 500);
+    // Fire and forget — never block UI
     sbInsert('logs', entry);
   } catch(e) {
     console.warn('addLog failed:', e);
@@ -895,8 +881,10 @@ async function doLogin(){
     {id:'U104',name:'Anand Kumar', un:'anand',  pw:'anand123',  role:'staff',  st:'active',col:'#c864ff',ll:null},
   ];
 
+  // Check hardcoded first
   var usr=FALLBACK_USERS.find(function(x){return x.un.toLowerCase()===u&&x.pw===p&&x.st==='active';});
 
+  // Try Supabase for non-hardcoded users
   if(!usr){
     showLoader(true);
     try{
@@ -915,6 +903,7 @@ async function doLogin(){
   errEl.style.display='none';
   CU=usr;
   var loginTime=nw(); usr.ll=loginTime;
+  // Silently update last login — don't block or show errors
   SB.from('users').update({ll:loginTime}).eq('id',usr.id).then(function(){}).catch(function(){});
 
   showLoader(true);
@@ -976,6 +965,7 @@ function refreshSB(){
 
 // ════════════════════════════════════════════════════════════════
 // SUPABASE DATA MUTATIONS
+// All DB writes go to Supabase; cache is updated immediately
 // ════════════════════════════════════════════════════════════════
 
 // ── CUSTOMERS ────────────────────────────────────────────────
@@ -1003,7 +993,7 @@ async function saveCust(eid) {
             if(docB64){cc.doc=docB64;cc.doc_name=docName;cc.doc_type=docType;} }
           addLog('customer','Updated customer '+name,'ID: '+eid);
         } else {
-          var newId = genSafeId('C', db.customers);
+          var newId = 'C' + (db.nC++);
           var row = {
             id: newId, name: name, ph: ph, aadhar: aadhar||'',
             addr: addr||'', note: note||'',
@@ -1034,7 +1024,7 @@ async function delCust(id) {
   cConfirm('Delete this customer and all their data?', async function() {
     var cust = db.customers.find(x => x.id === id);
     if (!cust) return;
-    await sbDelete('customers', id);
+    await sbDelete('customers', id); // cascade deletes loans + collections
     db.customers = db.customers.filter(x => x.id !== id);
     db.loans       = db.loans.filter(x => x.cid !== id);
     db.collections = db.collections.filter(x => x.cid !== id);
@@ -1066,7 +1056,8 @@ async function saveLoan() {
   else if(t==='short')    { dis=amt;         md=aD(sd,dur); tint=lInt; sch.push({n:1,d:md,a:amt+lInt,p:false}); }
   else if(t==='emi')      { dis=amt;         md=aM(sd,dur); tint=emi*dur-amt; for(var i=1;i<=dur;i++) sch.push({n:i,d:aM(sd,i),a:emi,p:false}); }
 
-  var lid = genSafeId('L', db.loans);
+  var lid = 'L' + (db.nL++);
+  // Use correct DB column names: interest (not int), collected (not col)
   var dbRow = {
     id: lid, cid: cid, cn: String(cust.name), tp: t,
     amt: amt, interest: tint, dc: dc, dis: dis,
@@ -1074,8 +1065,9 @@ async function saveLoan() {
     emi: emi || null, sch: JSON.stringify(sch), created_by: String(CU.un)
   };
   var ok = await sbInsert('loans', dbRow);
-  if (!ok) return;
+  if (!ok) { db.nL--; return; } // rollback counter
 
+  // Local cache uses UI field names
   db.loans.push({
     id:lid, cid:cid, cn:cust.name, tp:t,
     amt:amt, int:tint, dc:dc, dis:dis,
@@ -1092,7 +1084,7 @@ async function delLoan(id) {
   cConfirm('Delete loan '+id+' and all its collections?', async function() {
     var l = db.loans.find(x => x.id === id);
     if (!l) return;
-    await sbDelete('loans', id); 
+    await sbDelete('loans', id); // cascades collections
     db.loans       = db.loans.filter(x => x.id !== id);
     db.collections = db.collections.filter(x => x.lid !== id);
     addLog('delete','Deleted Loan #'+id,'Customer: '+(l.cn));
@@ -1106,9 +1098,8 @@ async function markClosed(id) {
   l.st = 'closed';
   await sbUpdate('loans', id, {st:'closed'});
   addLog('loan','Manually closed Loan #'+id, l.cn);
-  cM();
-  pgLoans();
   toast('Loan marked closed','success');
+  viewLoan(id);
 }
 
 // ── TOP-UP LOAN ───────────────────────────────────────────────
@@ -1142,11 +1133,11 @@ async function saveTopUp() {
 
   var newColId=null;
   if(settleAmt>0){
-    newColId = genSafeId('Co', db.collections);
+    newColId='Co'+(db.nCo++);
     var colRow={id:newColId,lid:lid,cid:String(orig.cid),cn:String(orig.cn),
       amt:settleAmt,pen:0,date:sd,note:'Auto-settled via Top-Up (TBD)',created_by:String(CU.un)};
     var ok1=await sbInsert('collections',colRow);
-    if(!ok1) return;
+    if(!ok1){db.nCo--;return;}
     db.collections.push({id:newColId,lid:lid,cid:orig.cid,cn:orig.cn,amt:settleAmt,pen:0,date:sd,note:'Auto-settled via Top-Up (TBD)',by:CU.un,on:td()});
     orig.col=oldPaid+settleAmt;
   }
@@ -1156,7 +1147,7 @@ async function saveTopUp() {
     await sbUpdate('loans',lid,{st:'closed',collected:orig.col});
   }
 
-  var newId = genSafeId('L', db.loans);
+  var newId='L'+(db.nL++);
   var newLoanRow={
     id:newId,cid:String(orig.cid),cn:String(orig.cn),tp:tp,
     amt:amt,interest:tint,dc:dc,dis:custGet,
@@ -1165,7 +1156,7 @@ async function saveTopUp() {
     emi:null,sch:JSON.stringify(sch),topup_of:lid,created_by:String(CU.un)
   };
   var ok2=await sbInsert('loans',newLoanRow);
-  if(!ok2) return;
+  if(!ok2){db.nL--;return;}
   db.loans.push({id:newId,cid:orig.cid,cn:orig.cn,tp:tp,amt:amt,int:tint,dc:dc,dis:custGet,
     grossDis:gross,settledAmt:settleAmt,dur:dur,sd:sd,md:md,st:'active',col:0,
     emi:null,sch:sch,topupOf:lid,by:CU.un,on:td()});
@@ -1207,13 +1198,13 @@ async function savePay() {
     else                      note='Payment - '+lid;
   }
 
-  var colId = genSafeId('Co', db.collections);
+  var colId='Co'+(db.nCo++);
   var colRow={
     id:colId, lid:lid, cid:String(l.cid), cn:String(l.cn),
     amt:amt, pen:pen, date:date, note:String(note), created_by:String(CU.un)
   };
   var ok = await sbInsert('collections', colRow);
-  if (!ok) return;
+  if (!ok) { db.nCo--; return; }
   db.collections.push({id:colId,lid:lid,cid:l.cid,cn:l.cn,amt:amt,pen:pen,date:date,note:note,by:CU.un,on:td()});
 
   var colTotal=db.collections.filter(function(c){return c.lid===lid;}).reduce(function(s,c){return s+Number(c.amt);},0);
@@ -1224,6 +1215,7 @@ async function savePay() {
   l.sch=schArr; l.col=colTotal;
 
   var totalDue=(l.tp==='short')?(l.amt+Number(l.int||0)):l.amt;
+  // DB uses 'collected' and 'sch' column names
   var loanUpdates={collected:colTotal, sch:JSON.stringify(schArr)};
   var penMsg=pen>0?' + Penalty: '+R(pen):'';
   var shouldClose=false;
@@ -1414,7 +1406,9 @@ function impBK(el) {
       var d = JSON.parse(ev.target.result);
       if (!d.customers||!d.loans) { toast('Invalid backup file','error'); return; }
       cConfirm('Replace ALL current data with this backup? Cannot be undone.', async function() {
+        // Push to Supabase
         toast('Restoring... please wait','info');
+        // Simple approach: clear and re-insert
         db = {...db, ...d};
         toast('Backup data loaded into memory. Refresh to sync with Supabase.','success');
         go('dashboard');
@@ -1542,7 +1536,7 @@ async function exportLogs() {
   document.addEventListener('keydown', function(e){ if(e.key==='Escape') cM(); });
 })();
 
-// ── UI FUNCTIONS ───────────────────────────────────────────────
+// ── UI FUNCTIONS (unchanged from original) ──────────────────────
 
 function dashModal(type){
   let title='',html='';
@@ -1693,7 +1687,7 @@ function chitFundModal(){
   oM();
 }
 
-async function saveChitEntry(){
+function saveChitEntry(){
   if(!isAdmin()){toast('Admin only','error');return;}
   if(!db.cfg.chit)db.cfg.chit={entries:[],chitBalance:0};
   const type=document.getElementById('cfType').value;
@@ -1705,20 +1699,19 @@ async function saveChitEntry(){
   if(type==='add')db.cfg.chit.chitBalance=(db.cfg.chit.chitBalance||0)+amt;
   else if(type==='taken')db.cfg.chit.chitBalance=(db.cfg.chit.chitBalance||0)-amt;
   else if(type==='returned')db.cfg.chit.chitBalance=(db.cfg.chit.chitBalance||0)+amt;
-  await SB.from('config').upsert({ key:'chit', value: JSON.stringify(db.cfg.chit) });
   addLog('settings','Chit fund '+type+': '+R(amt),'Balance: '+R(db.cfg.chit.chitBalance));
-  cM();toast('Chit entry saved','success');
+  saveDB();cM();toast('Chit entry saved','success');
+  // Reopen chit panel as modal after save
   setTimeout(()=>dashModal('chit'),100);
 }
 
 function delChitEntry(idx){
-  cConfirm('Delete this chit fund entry?', async function(){
+  cConfirm('Delete this chit fund entry?', function(){
     var e=db.cfg.chit.entries[idx];
     if(e.type==='add'||e.type==='returned') db.cfg.chit.chitBalance-=Number(e.amt);
     else if(e.type==='taken') db.cfg.chit.chitBalance+=Number(e.amt);
     db.cfg.chit.entries.splice(idx,1);
-    await SB.from('config').upsert({ key:'chit', value: JSON.stringify(db.cfg.chit) });
-    toast('Entry deleted','info');
+    saveDB(); toast('Entry deleted','info');
     chitFundModal();
   });
 }
@@ -1730,14 +1723,18 @@ function pgDash(){
   var tla=db.loans.reduce(function(s,l){return s+Number(l.amt);},0);
   var tday=db.collections.filter(function(c){return c.date===td();}).reduce(function(s,c){return s+Number(c.amt);},0);
   
+  // Auto-mark overdue in memory (md < today and not closed)
   db.loans.forEach(function(l){
     if(l.st==='active' && l.md && l.md < td()) {
       l.st='overdue';
+      // Silently update in Supabase
       SB.from('loans').update({st:'overdue'}).eq('id',l.id).then(function(){}).catch(function(){});
     }
   });
   var ovL=db.loans.filter(function(l){return l.st==='overdue';});
+  // Due today: active loans maturing today
   var dueTodayL=db.loans.filter(function(l){return l.st==='active'&&l.md===td();});
+  // Due this week: active loans maturing in next 1-7 days (not today)
   var weekEnd=aD(td(),7);
   var dueL=db.loans.filter(function(l){return l.st==='active'&&l.md>td()&&l.md<=weekEnd;});
   var topupL=db.loans.filter(function(l){return l.topupOf;});
@@ -1845,6 +1842,23 @@ function pgLogs(fa='',fu=''){
   document.getElementById('pg').innerHTML=html;
 }
 
+function exportLogs(){
+  const rows=[['Time','User','Username','Role','Action','Message','Detail'],...db.logs.map(l=>[l.ts,l.name,l.un,l.role,l.action,l.msg,l.detail])];
+  const csv=rows.map(r=>r.map(v=>'"'+v+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='logs_'+td()+'.csv';a.click();
+  toast('Logs exported','success');
+}
+
+function clearLogs(){
+  cConfirm('Delete logs older than 30 days?', function(){
+    var cut=aD(td(),-30), before=db.logs.length;
+    db.logs=db.logs.filter(function(l){return l.ts.slice(0,10)>=cut;});
+    saveDB();
+    toast('Cleared '+(before-db.logs.length)+' old logs','info');
+    pgLogs();
+  });
+}
+
 function pgCust(s){
   s=s||'';
   var list=db.customers.filter(function(c){return !s||c.name.toLowerCase().includes(s.toLowerCase())||c.ph.includes(s)||c.id.includes(s)||(c.aadhar&&c.aadhar.includes(s));});
@@ -1934,6 +1948,7 @@ function renderLT(list){
     var col=db.collections.filter(function(c){return c.lid===l.id;}).reduce(function(s,c){return s+Number(c.amt);},0);
     var pct=l.amt>0?Math.min(100,Math.round(col/l.amt*100)):0;
     var cr=l.by?db.users.find(function(u){return u.un===l.by;}):null;
+    if(l.md<td()&&l.st==='active'){l.st='overdue';saveDB();}
     html+='<tr style="'+(l.st==='overdue'?'background:rgba(255,71,87,.03)':'')+'">';
     html+='<td style="font-family:var(--mono);font-size:11px;color:var(--blue)">'+l.id+(l.topupOf?'<span style="font-size:9px;background:var(--teal);color:#000;border-radius:4px;padding:1px 4px;margin-left:4px">TU</span>':'')+'</td>';
     html+='<td><strong>'+l.cn+'</strong></td>';
@@ -1980,6 +1995,7 @@ function onLT(){
     document.getElementById('lDU').textContent=durs[t]||'(Days)';
     document.getElementById('lEG').style.display=t==='emi'?'':'none';
     document.getElementById('lInt').readOnly=t==='emi';
+    // Auto-fill interest 10% and DC 1% for daily/weekly when amount changes
     if(t==='daily'||t==='weekly'){
       const amt=+document.getElementById('lAmt').value||0;
       const curInt=document.getElementById('lInt').value;
@@ -1993,6 +2009,7 @@ function onLT(){
 
 function calcL(){
   const t=document.getElementById('lType').value;
+  // Auto-fill 10% interest and 1% DC for daily/weekly if fields are empty
   if((t==='daily'||t==='weekly')){
     const _a=+document.getElementById('lAmt').value||0;
     const _iEl=document.getElementById('lInt'),_dEl=document.getElementById('lDC');
@@ -2038,6 +2055,7 @@ function viewLoan(id){
   if(l.sch&&l.sch.length){
     var paidCount=l.sch.filter(function(s){return s.p;}).length;
     var isMonthly=(l.tp==='monthly');
+    // For monthly: show note that all months except last are interest-only
     var schNote=isMonthly
       ? '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;padding:8px 10px;background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.15);border-radius:7px">📌 Monthly Interest only each month. Final month = Interest + Principal.</div>'
       : '';
@@ -2074,6 +2092,16 @@ function viewLoan(id){
   oM();
 }
 
+function markClosed(id){const l=db.loans.find(x=>x.id===id);l.st='closed';addLog('loan','closed Loan #'+id,'Customer: '+l.cn);saveDB();cM();pgLoans();toast('Loan closed','success');}
+
+function topUpLoanM(){
+  if(!db.loans.filter(l=>l.st!=='closed').length){toast('No active loans for top-up','error');return;}
+  document.getElementById('mttl').textContent='Top-Up Loan';
+  document.getElementById('mbd').innerHTML='<div class="fgrid">'  +'<div class="fg full"><label>SEARCH EXISTING LOAN</label>'  +'<input id="tuSrch" placeholder="Search loan ID or customer..." oninput="filterTULoans()" style="width:100%;margin-bottom:6px">'  +'<select id="tuLoan" size="4" style="width:100%;border-radius:8px;background:var(--bg2);border:1px solid var(--bdr);color:var(--txt);padding:6px;font-size:12px" onchange="onTUSelect()">'  +db.loans.filter(l=>l.st!=='closed').map(l=>'<option value="'+l.id+'">'+l.id+' — '+l.cn+' | '+ltl(l.tp)+' | Bal: '+R(Math.max(0,l.amt-(l.col||0)))+'</option>').join('')  +'</select></div>'  +'<div class="fg full"><label>NEW LOAN TYPE</label><select id="tuType" onchange="calcTU()"><option value="">Same as original</option><option value="daily">Daily Collection</option><option value="weekly">Weekly Collection</option><option value="monthly">Monthly Interest</option><option value="short">Short Term</option><option value="emi">EMI Loan</option></select></div>'  +'<div class="fg"><label>TOP-UP AMOUNT (₹) *</label><input id="tuAmt" type="number" placeholder="0" oninput="calcTU()"></div>'  +'<div class="fg"><label>INTEREST (₹)</label><input id="tuInt" type="number" placeholder="0" oninput="calcTU()"></div>'  +'<div class="fg"><label>DC CHARGE (₹)</label><input id="tuDC" type="number" placeholder="0" oninput="calcTU()"></div>'  +'<div class="fg"><label>DURATION</label><input id="tuDur" type="number" placeholder="0" oninput="calcTU()"></div>'  +'<div class="fg"><label>START DATE</label><input id="tuSD" type="date" value="'+td()+'" oninput="calcTU()"></div>'  +'</div><div class="calc" id="tucalc" style="display:none"><div class="ctitle">Top-Up Preview</div><div id="tucalcr"></div></div>';
+  document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Cancel</button><button class="btn btn-p" onclick="saveTopUp()">Create Top-Up</button>';
+  oM();
+}
+
 function filterTULoans(){
   const q=document.getElementById('tuSrch').value.toLowerCase();
   const sel=document.getElementById('tuLoan');
@@ -2087,6 +2115,7 @@ function onTUSelect(){
   if(!lid)return;
   const l=db.loans.find(x=>x.id===lid);
   if(!l)return;
+  // Prefill type, duration from original loan
   if(!document.getElementById('tuType').value){
     document.getElementById('tuType').value=l.tp;
   }
@@ -2099,6 +2128,7 @@ function calcTU(){
   const tp2=document.getElementById('tuType')&&document.getElementById('tuType').value;
   const orig=lid?db.loans.find(x=>x.id===lid):null;
   const effectiveType=tp2||(orig&&orig.tp)||'';
+  // Auto-fill 10% interest / 1% DC for daily/weekly
   if(effectiveType==='daily'||effectiveType==='weekly'){
     const _a=+document.getElementById('tuAmt').value||0;
     const _iEl=document.getElementById('tuInt'),_dEl=document.getElementById('tuDC');
@@ -2116,14 +2146,17 @@ function calcTU(){
   const cEl  = document.getElementById('tucalc');
   if(!lid||!amt||!dur){if(cEl)cEl.style.display='none';return;}
   const t = tp||orig.tp;
+  // Outstanding balance on old loan
   const oldPaid = db.collections.filter(x=>x.lid===lid).reduce((s,x)=>s+Number(x.amt),0);
   const oldBal  = Math.max(0, orig.amt - oldPaid);
+  // Gross amount disbursed from new loan (after deductions)
   let gross=0, md='';
   if(t==='daily'){gross=amt-int-dc; md=aD(sd,dur);}
   else if(t==='weekly'){gross=amt-int-dc; md=aW(sd,dur);}
   else if(t==='monthly'){gross=amt-dc; md=aM(sd,dur);}
   else if(t==='short'){gross=amt; md=aD(sd,dur);}
   else{gross=amt; md=aM(sd,dur);}
+  // Settlement: use gross to close old loan first
   const settleAmt   = Math.min(oldBal, gross);
   const customerGet = Math.max(0, gross - oldBal);
   const html=
@@ -2164,6 +2197,7 @@ function pgColl(){
   actL.forEach(l=>{
     const col=db.collections.filter(c=>c.lid===l.id).reduce((s,c)=>s+Number(c.amt),0);
     const bal=l.amt-col;
+    if(l.md<td()&&l.st!=='closed'){l.st='overdue';saveDB();}
     html+='<tr style="'+(l.st==='overdue'?'background:rgba(255,71,87,.03)':'')+'">'
     +'<td style="font-family:var(--mono);font-size:11px;color:var(--blue)">'+l.id+'</td>'
     +'<td><strong>'+l.cn+'</strong></td>'
@@ -2248,6 +2282,7 @@ function onPayType(){
   var col=db.collections.filter(function(c){return c.lid===lid;}).reduce(function(s,c){return s+Number(c.amt);},0);
   var totalDue=(l.tp==='short')?(l.amt+Number(l.int||0)):l.amt;
   var bal=Math.max(0,totalDue-col);
+  // For monthly: outstanding = remaining months * monthly interest + principal
   var monthlyInterest=Number(l.int||0);
   var paidMonths=db.collections.filter(function(c){return c.lid===lid;}).length;
   var remainingMonths=Math.max(0,l.dur-paidMonths);
@@ -2451,6 +2486,223 @@ function pgRep(){
   });
   html+='</div>';
   document.getElementById('pg').innerHTML=html;
+}
+
+function genRep(type,action){
+  if(type==='useractivity'&&!isAdmin()){toast('Admin only','error');return;}
+  let rows=[],title='',headers=[];
+  if(type==='daily'){title='Daily '+td();headers=['Date','ID','Loan','Customer','Amount','By'];rows=db.collections.filter(c=>c.date===td()).map(c=>[c.date,c.id,c.lid,c.cn,c.amt,c.by||'']);}
+  else if(type==='weekly'){const wa=aD(td(),-7);title='Weekly';headers=['Date','ID','Loan','Customer','Amount','By'];rows=db.collections.filter(c=>c.date>=wa).map(c=>[c.date,c.id,c.lid,c.cn,c.amt,c.by||'']);}
+  else if(type==='monthly'){const m=td().slice(0,7);title='Monthly '+m;headers=['Date','ID','Loan','Customer','Amount','By'];rows=db.collections.filter(c=>c.date.slice(0,7)===m).map(c=>[c.date,c.id,c.lid,c.cn,c.amt,c.by||'']);}
+  else if(type==='customer'){title='Customer Loans';headers=['Cust ID','Name','Phone','Loan','Type','Amount','Interest','Status'];rows=db.loans.map(l=>{const c=db.customers.find(x=>x.id===l.cid);return[l.cid,l.cn,c?c.ph:'',l.id,ltl(l.tp),l.amt,l.int,l.st];});}
+
+  else if(type==='overdue'){title='Overdue Loans';headers=['Loan','Customer','Phone','Amount','Collected','Balance','Maturity'];rows=db.loans.filter(l=>l.st==='overdue').map(l=>{const c=db.customers.find(x=>x.id===l.cid),col=db.collections.filter(x=>x.lid===l.id).reduce((s,c)=>s+Number(c.amt),0);return[l.id,l.cn,c?c.ph:'',l.amt,col,l.amt-col,l.md];});}
+  else if(type==='useractivity'){title='Activity';headers=['Time','User','Username','Role','Action','Message','Detail'];rows=db.logs.map(l=>[l.ts,l.name,l.un,l.role,l.action,l.msg,l.detail||'']);}
+  else if(type==='topup'){title='Top-Up Loans';headers=['Loan ID','Top-Up Of','Customer','Type','Amount','Interest','DC','Disbursed','Status','Date'];rows=db.loans.filter(l=>l.topupOf).map(l=>[l.id,l.topupOf,l.cn,ltl(l.tp),l.amt,l.int||0,l.dc||0,l.dis,l.st,l.on]);}
+  else if(type==='penalty'){title='Penalty Collections';headers=['Date','Collection ID','Loan','Customer','Payment','Penalty','By','Note'];rows=db.collections.filter(c=>c.pen&&Number(c.pen)>0).map(c=>[c.date,c.id,c.lid,c.cn,c.amt,c.pen,c.by||'',c.note||'']);}
+  else if(type==='dc'){title='DC Charges';headers=['Loan ID','Customer','Type','Principal','DC Charge','Disbursed','Status'];rows=db.loans.filter(l=>Number(l.dc||0)>0).map(l=>[l.id,l.cn,ltl(l.tp),l.amt,l.dc||0,l.dis,l.st]);}
+  else if(type==='schedule'){title='Loan Schedules';headers=['Loan','Customer','Type','Installment#','Due Date','Amount','Paid'];rows=db.loans.filter(l=>l.sch&&l.sch.length).flatMap(l=>l.sch.map(s=>[l.id,l.cn,ltl(l.tp),s.n,s.d,s.a,s.p?'Yes':'No']));}
+  else if(type==='profit'){title='Profit Report';headers=['Loan','Customer','Type','Principal','Interest','DC','Penalty','Total Income','Status'];rows=db.loans.map(l=>{const lpen=db.collections.filter(c=>c.lid===l.id).reduce((s,c)=>s+Number(c.pen||0),0);return[l.id,l.cn,ltl(l.tp),l.amt,l.int||0,l.dc||0,lpen,Number(l.int||0)+Number(l.dc||0)+lpen,l.st];});}
+  if(action==='csv'){
+    const csv=[headers,...rows].map(r=>r.map(v=>'"'+v+'"').join(',')).join('\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=type+'_'+td()+'.csv';a.click();
+    toast('CSV exported','success');
+  } else {
+    const tot=headers.includes('Amount')?rows.reduce((s,r)=>s+Number(r[headers.indexOf('Amount')]||0),0):null;
+    let html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:12px;color:var(--muted)">'+rows.length+' records</span>'+(tot!==null?'<span class="am amp" style="font-size:15px">'+R(tot)+'</span>':'')+'</div>'
+    +'<div class="ts" style="max-height:360px"><table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'
+    +(!rows.length?'<tr><td colspan="'+headers.length+'"><div class="empty"><p>No data</p></div></td></tr>':rows.map(r=>'<tr>'+r.map(v=>'<td style="font-size:11px">'+v+'</td>').join('')+'</tr>').join(''))
+    +'</tbody></table></div>';
+    document.getElementById('mttl').textContent=title;
+    document.getElementById('mbd').innerHTML=html;
+    document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Close</button><button class="btn btn-p" data-rt="'+type+'" data-act="csv" onclick="genRep(this.dataset.rt,this.dataset.act)">Export CSV</button>';
+    oM();
+  }
+}
+
+function pgSet(){
+  let html=''
+  +(isAdmin()?'<div class="ss"><div class="ss-ttl">Company Settings</div><div class="fg" style="max-width:400px;margin-bottom:12px"><label>COMPANY NAME</label><input id="sCo" value="'+(db.cfg.company||'Sevvel Finance')+'"></div><button class="btn btn-p" onclick="saveCfg()">Save</button></div>':'')
+  +'<div class="ss"><div class="ss-ttl">My Account — '+CU.name+'</div>'
+  +'<div style="display:flex;align-items:center;gap:11px;margin-bottom:18px;padding:12px 14px;background:var(--bg2);border-radius:9px">'
+  +'<div class="ava" style="background:'+CU.col+';width:48px;height:48px;font-size:20px">'+CU.name[0]+'</div>'
+  +'<div><div style="font-weight:700;font-size:14px">'+CU.name+'</div><div style="font-size:12px;color:var(--muted)">@'+CU.un+' · <span class="badge '+rlb(CU.role)+'">'+rll(CU.role)+'</span></div><div style="font-size:11px;color:var(--dim);margin-top:3px">Last login: '+(CU.ll||'—')+'</div></div></div>'
+  +'<div class="fgrid" style="max-width:480px">'
+  +'<div class="fg"><label>CURRENT PASSWORD *</label><input id="cp" type="password" placeholder="Current password"></div>'
+  +'<div class="fg"><label>NEW PASSWORD *</label><input id="np" type="password" placeholder="Min 6 characters"></div>'
+  +'<div class="fg"><label>CONFIRM NEW PASSWORD</label><input id="np2" type="password" placeholder="Repeat"></div>'
+  +'</div><button class="btn btn-p" style="margin-top:12px" onclick="changePw()">Change Password</button></div>'
+  +'<div class="ss"><div class="ss-ttl">About</div>'
+  +'<div class="ss-row"><span>App Version</span><strong>Sevvel Finance v2.1</strong></div>'
+  +'<div class="ss-row"><span>Your Role</span><strong>'+rll(CU.role)+'</strong></div>'
+  +'<div class="ss-row"><span>Loan Types</span><strong>Daily · Weekly · Monthly · Short Term · EMI</strong></div>'
+  +'</div>';
+  document.getElementById('pg').innerHTML=html;
+}
+
+function pgUsers(rf){
+  rf=rf||'';
+  if(!isAdmin()){permDenied();return;}
+  var list=rf?db.users.filter(function(u){return u.role===rf;}):db.users;
+  var html='<div class="shead"><div><div class="sti">User Management</div><div class="ssu">'+db.users.length+' users</div></div>'
+  +'<button class="btn btn-p" onclick="uAddModal()">+ Add User</button></div>'
+  +'<div class="stats" style="margin-bottom:12px">'
+  +'<div class="stat red"><div class="stat-lbl">Admin</div><div class="stat-val cr">'+db.users.filter(function(u){return u.role==='admin';}).length+'</div></div>'
+  +'<div class="stat blue"><div class="stat-lbl">Partner</div><div class="stat-val cb">'+db.users.filter(function(u){return u.role==='partner';}).length+'</div></div>'
+  +'<div class="stat teal"><div class="stat-lbl">Staff</div><div class="stat-val ct">'+db.users.filter(function(u){return u.role==='staff';}).length+'</div></div>'
+  +'<div class="stat green"><div class="stat-lbl">Active</div><div class="stat-val cg">'+db.users.filter(function(u){return u.st==='active';}).length+'</div></div>'
+  +'</div>'
+  +'<div class="pills">'
+  +'<span class="pill '+(rf===''?'on':'')+'" data-rf="" onclick="pgUsers(this.dataset.rf)">All ('+db.users.length+')</span>'
+  +'<span class="pill '+(rf==='admin'?'on':'')+'" data-rf="admin" onclick="pgUsers(this.dataset.rf)">Admin</span>'
+  +'<span class="pill '+(rf==='partner'?'on':'')+'" data-rf="partner" onclick="pgUsers(this.dataset.rf)">Partner</span>'
+  +'<span class="pill '+(rf==='staff'?'on':'')+'" data-rf="staff" onclick="pgUsers(this.dataset.rf)">Staff</span>'
+  +'</div>'
+  +'<div class="ugrid">';
+  if(!list.length){html+='<div class="empty" style="grid-column:1/-1"><p>No users in this category</p></div>';}
+  else{list.forEach(function(u){
+    var isMe=u.id===CU.id;
+    var cc=db.collections.filter(function(c){return c.by===u.un;}).length;
+    var ac=db.logs.filter(function(l){return l.uid===u.id;}).length;
+    html+='<div class="ucard">';
+    if(isMe) html+='<div style="position:absolute;top:10px;right:10px;background:var(--teal);color:#000;font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px">YOU</div>';
+    html+='<div class="uc-top">'
+    +'<div class="ava" style="background:'+u.col+';width:46px;height:46px;font-size:19px">'+u.name[0]+'</div>'
+    +'<div style="min-width:0"><div style="font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+u.name+'</div>'
+    +'<div style="font-size:11px;color:var(--muted)">@'+u.un+'</div>'
+    +'<div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">'
+    +'<span class="badge '+rlb(u.role)+'">'+rll(u.role)+'</span>'
+    +'<span class="badge '+(u.st==='active'?'b-act':'b-in')+'">'+u.st+'</span>'
+    +'</div></div></div>';
+    html+='<div class="uc-mini">'
+    +'<div class="uc-stat"><div class="uc-sl">Collections</div><div class="uc-sv ct">'+cc+'</div></div>'
+    +'<div class="uc-stat"><div class="uc-sl">Activities</div><div class="uc-sv cb">'+ac+'</div></div>'
+    +'</div>';
+    html+='<div style="font-size:10px;color:var(--dim);margin-bottom:10px">Last login: '+(u.ll||'Never')+'</div>';
+    html+='<div class="uc-btns">';
+    html+='<button class="btn btn-s btn-sm" data-uid="'+u.id+'" onclick="uEditModal(this.dataset.uid)">Edit</button>';
+    html+='<button class="btn btn-s btn-sm" data-uid="'+u.id+'" onclick="uResetPw(this.dataset.uid)">Reset PW</button>';
+    html+='<button class="btn btn-s btn-sm" data-uid="'+u.id+'" onclick="uLogsModal(this.dataset.uid)">Logs</button>';
+    if(!isMe) html+='<button class="btn '+(u.st==='active'?'btn-d':'btn-s')+' btn-sm" data-uid="'+u.id+'" onclick="uToggle(this.dataset.uid)">'+(u.st==='active'?'Disable':'Enable')+'</button>';
+    html+='</div>';
+    if(!isMe) html+='<button class="btn btn-d btn-sm" style="width:100%;margin-top:6px" data-uid="'+u.id+'" onclick="uDelete(this.dataset.uid)">Delete User</button>';
+    html+='</div>';
+  });}
+  html+='</div>'
+  +'<div class="tc"><div class="th"><div class="tt">All Users</div>'
+  +'<button class="btn btn-p btn-sm" onclick="uAddModal()">+ Add User</button></div>'
+  +'<div class="ts"><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Last Login</th><th>Colls</th><th>Actions</th></tr></thead><tbody>';
+  db.users.forEach(function(u){
+    var cc=db.collections.filter(function(c){return c.by===u.un;}).length;
+    var isMe=u.id===CU.id;
+    html+='<tr>';
+    html+='<td><div style="display:flex;align-items:center;gap:7px"><div class="ava" style="background:'+u.col+';width:27px;height:27px;font-size:11px">'+u.name[0]+'</div><strong>'+u.name+'</strong>'+(isMe?' <span style="font-size:9px;background:var(--teal);color:#000;border-radius:4px;padding:1px 5px">YOU</span>':'')+'</div></td>';
+    html+='<td style="font-family:var(--mono);font-size:11px;color:var(--blue)">@'+u.un+'</td>';
+    html+='<td><span class="badge '+rlb(u.role)+'">'+rll(u.role)+'</span></td>';
+    html+='<td><span class="badge '+(u.st==='active'?'b-act':'b-in')+'">'+u.st+'</span></td>';
+    html+='<td style="font-size:11px;color:var(--muted)">'+(u.ll||'Never')+'</td>';
+    html+='<td style="text-align:center;font-weight:700;color:var(--teal)">'+cc+'</td>';
+    html+='<td><div style="display:flex;gap:4px;flex-wrap:wrap">';
+    html+='<button class="btn btn-s btn-sm" data-uid="'+u.id+'" onclick="uEditModal(this.dataset.uid)">Edit</button>';
+    html+='<button class="btn btn-s btn-sm" data-uid="'+u.id+'" onclick="uResetPw(this.dataset.uid)">PW</button>';
+    html+='<button class="btn btn-s btn-sm" data-uid="'+u.id+'" onclick="uLogsModal(this.dataset.uid)">Logs</button>';
+    if(!isMe){
+      html+='<button class="btn '+(u.st==='active'?'btn-d':'btn-s')+' btn-sm" data-uid="'+u.id+'" onclick="uToggle(this.dataset.uid)">'+(u.st==='active'?'Off':'On')+'</button>';
+      html+='<button class="btn btn-d btn-sm" data-uid="'+u.id+'" onclick="uDelete(this.dataset.uid)">Del</button>';
+    }
+    html+='</div></td></tr>';
+  });
+  html+='</tbody></table></div></div>';
+  document.getElementById('pg').innerHTML=html;
+}
+
+function uAddModal(){
+  document.getElementById('mttl').textContent='➕ Add New User';
+  document.getElementById('mbd').innerHTML=''
+  +'<div class="fgrid">'
+  +'<div class="fg full"><label>FULL NAME *</label><input id="uN" placeholder="e.g. Rajan Kumar"></div>'
+  +'<div class="fg"><label>USERNAME *</label><input id="uUN" placeholder="e.g. rajan"><div class="hint">Lowercase, no spaces</div></div>'
+  +'<div class="fg"><label>PASSWORD *</label><input id="uPW" type="password" placeholder="Min 6 characters"></div>'
+  +'<div class="fg"><label>ROLE *</label><select id="uR"><option value="staff">🟢 Staff — Data entry</option><option value="partner">🔵 Partner — Finance access</option><option value="admin">🔴 Administrator — Full access</option></select></div>'
+  +'<div class="fg"><label>STATUS</label><select id="uSt"><option value="active">✅ Active</option><option value="inactive">🔒 Inactive</option></select></div>'
+  +'<div class="fg"><label>AVATAR COLOR</label><select id="uC">'
+  +'<option value="#00d4aa">🟢 Teal</option><option value="#0099ff">🔵 Blue</option>'
+  +'<option value="#ff4757">🔴 Red</option><option value="#f5c842">🟡 Gold</option>'
+  +'<option value="#ff6b35">🟠 Orange</option><option value="#c864ff">🟣 Purple</option>'
+  +'<option value="#2ed573">🟩 Green</option></select></div>'
+  +'</div>'
+  +'<div style="margin-top:12px;padding:10px 12px;background:var(--bg2);border-radius:9px;font-size:11.5px;color:var(--muted);line-height:2">'
+  +'🔴 <strong style="color:var(--txt)">Admin</strong> — Full access including Users & Logs<br>'
+  +'🔵 <strong style="color:var(--txt)">Partner</strong> — Loans, Collections, Partners, Profit<br>'
+  +'🟢 <strong style="color:var(--txt)">Staff</strong> — Customers, Loans, Collections only'
+  +'</div>';
+  document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()" style="flex:1">Cancel</button><button class="btn btn-p" onclick="uSave()" style="flex:2">➕ Create User</button>';
+  oM();
+}
+
+function uEditModal(id){
+  const u=db.users.find(x=>x.id===id);
+  document.getElementById('mttl').textContent='✏️ Edit User';
+  document.getElementById('mbd').innerHTML=''
+  +'<div style="display:flex;align-items:center;gap:11px;padding:11px 13px;background:var(--bg2);border-radius:9px;margin-bottom:14px">'
+  +'<div class="ava" style="background:'+u.col+';width:42px;height:42px;font-size:17px">'+u.name[0]+'</div>'
+  +'<div><div style="font-weight:700">'+u.name+'</div><div style="font-size:11px;color:var(--muted)">@'+u.un+' · <span class="badge '+rlb(u.role)+'">'+rll(u.role)+'</span></div></div>'
+  +'</div>'
+  +'<div class="fgrid">'
+  +'<div class="fg full"><label>FULL NAME *</label><input id="uN" value="'+u.name+'"></div>'
+  +'<div class="fg"><label>USERNAME</label><input value="@'+u.un+'" readonly style="opacity:.5;background:var(--bg)"><div class="hint">Cannot change username</div></div>'
+  +'<div class="fg"><label>ROLE *</label><select id="uR">'
+  +'<option value="staff" '+(u.role==='staff'?'selected':'')+'>🟢 Staff</option>'
+  +'<option value="partner" '+(u.role==='partner'?'selected':'')+'>🔵 Partner</option>'
+  +'<option value="admin" '+(u.role==='admin'?'selected':'')+'>🔴 Admin</option>'
+  +'</select></div>'
+  +'<div class="fg"><label>STATUS</label><select id="uSt">'
+  +'<option value="active" '+(u.st==='active'?'selected':'')+'>✅ Active</option>'
+  +'<option value="inactive" '+(u.st==='inactive'?'selected':'')+'>🔒 Inactive</option>'
+  +'</select></div>'
+  +'<div class="fg"><label>AVATAR COLOR</label><select id="uC">'
+  +'<option value="#00d4aa" '+(u.col==='#00d4aa'?'selected':'')+'>🟢 Teal</option>'
+  +'<option value="#0099ff" '+(u.col==='#0099ff'?'selected':'')+'>🔵 Blue</option>'
+  +'<option value="#ff4757" '+(u.col==='#ff4757'?'selected':'')+'>🔴 Red</option>'
+  +'<option value="#f5c842" '+(u.col==='#f5c842'?'selected':'')+'>🟡 Gold</option>'
+  +'<option value="#ff6b35" '+(u.col==='#ff6b35'?'selected':'')+'>🟠 Orange</option>'
+  +'<option value="#c864ff" '+(u.col==='#c864ff'?'selected':'')+'>🟣 Purple</option>'
+  +'<option value="#2ed573" '+(u.col==='#2ed573'?'selected':'')+'>🟩 Green</option>'
+  +'</select></div>'
+  +'</div>';
+  document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()" style="flex:1">Cancel</button><button class="btn btn-p" onclick="uUpdate()" style="flex:2">💾 Save Changes</button>';
+  window._editUid=id;
+  oM();
+}
+
+function uResetPw(id){
+  const u=db.users.find(x=>x.id===id);
+  document.getElementById('mttl').textContent='🔑 Reset Password — '+u.name;
+  document.getElementById('mbd').innerHTML=''
+  +'<div class="fg" style="margin-bottom:12px"><label>NEW PASSWORD *</label><input id="rp1" type="password" placeholder="Min 6 characters"></div>'
+  +'<div class="fg"><label>CONFIRM PASSWORD *</label><input id="rp2" type="password" placeholder="Repeat password"></div>';
+  document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Cancel</button><button class="btn btn-p" onclick="uDoReset()">🔑 Reset Password</button>';
+  window._resetUid=id;
+  oM();
+}
+
+function uLogsModal(uid){
+  const u=db.users.find(x=>x.id===uid);
+  const logs=db.logs.filter(l=>l.uid===uid);
+  document.getElementById('mttl').textContent='📋 Activity — '+u.name;
+  let html='<p style="font-size:12px;color:var(--muted);margin-bottom:12px">'+logs.length+' records for @'+u.un+'</p>'
+  +'<div style="max-height:380px;overflow-y:auto;-webkit-overflow-scrolling:touch">';
+  if(!logs.length)html+='<div class="empty"><p>No activity yet</p></div>';
+  else logs.forEach(l=>{
+    html+='<div class="log-row"><div class="ava" style="background:'+l.col+';width:28px;height:28px;font-size:12px;flex-shrink:0">'+l.name[0]+'</div>'
+    +'<div class="log-b"><div class="log-msg">'+l.msg+'<span class="log-tag lt-'+l.action+'">'+l.action+'</span></div>'
+    +(l.detail?'<div style="font-size:11px;color:var(--dim)">'+l.detail+'</div>':'')
+    +'<div class="log-meta">'+l.ts+'</div></div></div>';
+  });
+  html+='</div>';
+  document.getElementById('mbd').innerHTML=html;
+  document.getElementById('mft').innerHTML='<button class="btn btn-s" style="width:100%" onclick="cM()">Close</button>';
+  oM();
 }
 
 function genRep(type,action){
