@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -468,7 +468,7 @@ table { min-width: 100%; }
 /* Modal full-screen on small phones */
 @media(max-width: 480px){
   .modal { 
-    max-height: 95vh; 
+    max-height: 85dvh; 
     margin: 10px 8px;
     border-radius: 16px;
   }
@@ -502,6 +502,14 @@ table { min-width: 100%; }
   .tb-ttl { font-size: 14px; }
   .sess span { display: none; }
 }
+
+/* ── PARTNER GRID & MODAL BUTTON FIXES ── */
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.pcard { background: var(--card); border: 1px solid var(--bdr); border-radius: var(--rad); padding: 20px; position: relative; }
+.pmini { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; background: var(--bg2); padding: 12px; border-radius: 8px; }
+.pst-l { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+.pst-v { font-size: 16px; font-weight: 800; }
+.mft { flex-shrink: 0; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 
 </style>
 <style>
@@ -599,6 +607,7 @@ table { min-width: 100%; }
         <div class="sess-dot"></div>
         <span id="sessNm">user</span>
       </div>
+      <button class="logout-btn" onclick="logout()" title="Logout" style="margin-left: 8px;">⏻</button>
     </div>
     <div class="pg" id="pg"></div>
   </main>
@@ -636,6 +645,17 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 const { createClient } = supabase;
 const SB = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ── SMART ID GENERATOR ──
+function genSafeId(prefix, list) {
+  if(!list || list.length === 0) return prefix + '001';
+  var max = 0;
+  for(var i=0; i<list.length; i++) {
+    var num = parseInt(list[i].id.replace(prefix, ''), 10);
+    if(!isNaN(num) && num > max) max = num;
+  }
+  return prefix + String(max + 1).padStart(3, '0');
+}
 
 // ── HELPERS ──────────────────────────────────────────────────
 const R   = v => '₹' + Number(v||0).toLocaleString('en-IN');
@@ -993,7 +1013,7 @@ async function saveCust(eid) {
             if(docB64){cc.doc=docB64;cc.doc_name=docName;cc.doc_type=docType;} }
           addLog('customer','Updated customer '+name,'ID: '+eid);
         } else {
-          var newId = 'C' + (db.nC++);
+          var newId = genSafeId('C', db.customers);
           var row = {
             id: newId, name: name, ph: ph, aadhar: aadhar||'',
             addr: addr||'', note: note||'',
@@ -1056,7 +1076,7 @@ async function saveLoan() {
   else if(t==='short')    { dis=amt;         md=aD(sd,dur); tint=lInt; sch.push({n:1,d:md,a:amt+lInt,p:false}); }
   else if(t==='emi')      { dis=amt;         md=aM(sd,dur); tint=emi*dur-amt; for(var i=1;i<=dur;i++) sch.push({n:i,d:aM(sd,i),a:emi,p:false}); }
 
-  var lid = 'L' + (db.nL++);
+  var lid = genSafeId('L', db.loans);
   // Use correct DB column names: interest (not int), collected (not col)
   var dbRow = {
     id: lid, cid: cid, cn: String(cust.name), tp: t,
@@ -1065,7 +1085,7 @@ async function saveLoan() {
     emi: emi || null, sch: JSON.stringify(sch), created_by: String(CU.un)
   };
   var ok = await sbInsert('loans', dbRow);
-  if (!ok) { db.nL--; return; } // rollback counter
+  if (!ok) return;
 
   // Local cache uses UI field names
   db.loans.push({
@@ -1133,11 +1153,11 @@ async function saveTopUp() {
 
   var newColId=null;
   if(settleAmt>0){
-    newColId='Co'+(db.nCo++);
+    newColId = genSafeId('Co', db.collections);
     var colRow={id:newColId,lid:lid,cid:String(orig.cid),cn:String(orig.cn),
       amt:settleAmt,pen:0,date:sd,note:'Auto-settled via Top-Up (TBD)',created_by:String(CU.un)};
     var ok1=await sbInsert('collections',colRow);
-    if(!ok1){db.nCo--;return;}
+    if(!ok1) return;
     db.collections.push({id:newColId,lid:lid,cid:orig.cid,cn:orig.cn,amt:settleAmt,pen:0,date:sd,note:'Auto-settled via Top-Up (TBD)',by:CU.un,on:td()});
     orig.col=oldPaid+settleAmt;
   }
@@ -1147,7 +1167,7 @@ async function saveTopUp() {
     await sbUpdate('loans',lid,{st:'closed',collected:orig.col});
   }
 
-  var newId='L'+(db.nL++);
+  var newId = genSafeId('L', db.loans);
   var newLoanRow={
     id:newId,cid:String(orig.cid),cn:String(orig.cn),tp:tp,
     amt:amt,interest:tint,dc:dc,dis:custGet,
@@ -1156,7 +1176,7 @@ async function saveTopUp() {
     emi:null,sch:JSON.stringify(sch),topup_of:lid,created_by:String(CU.un)
   };
   var ok2=await sbInsert('loans',newLoanRow);
-  if(!ok2){db.nL--;return;}
+  if(!ok2) return;
   db.loans.push({id:newId,cid:orig.cid,cn:orig.cn,tp:tp,amt:amt,int:tint,dc:dc,dis:custGet,
     grossDis:gross,settledAmt:settleAmt,dur:dur,sd:sd,md:md,st:'active',col:0,
     emi:null,sch:sch,topupOf:lid,by:CU.un,on:td()});
@@ -1198,13 +1218,13 @@ async function savePay() {
     else                      note='Payment - '+lid;
   }
 
-  var colId='Co'+(db.nCo++);
+  var colId = genSafeId('Co', db.collections);
   var colRow={
     id:colId, lid:lid, cid:String(l.cid), cn:String(l.cn),
     amt:amt, pen:pen, date:date, note:String(note), created_by:String(CU.un)
   };
   var ok = await sbInsert('collections', colRow);
-  if (!ok) { db.nCo--; return; }
+  if (!ok) return;
   db.collections.push({id:colId,lid:lid,cid:l.cid,cn:l.cn,amt:amt,pen:pen,date:date,note:note,by:CU.un,on:td()});
 
   var colTotal=db.collections.filter(function(c){return c.lid===lid;}).reduce(function(s,c){return s+Number(c.amt);},0);
@@ -2092,7 +2112,16 @@ function viewLoan(id){
   oM();
 }
 
-function markClosed(id){const l=db.loans.find(x=>x.id===id);l.st='closed';addLog('loan','closed Loan #'+id,'Customer: '+l.cn);saveDB();cM();pgLoans();toast('Loan closed','success');}
+async function markClosed(id) {
+  var l = db.loans.find(x => x.id === id);
+  if (!l) return;
+  l.st = 'closed';
+  await sbUpdate('loans', id, {st:'closed'});
+  addLog('loan','Manually closed Loan #'+id, l.cn);
+  cM();
+  pgLoans();
+  toast('Loan marked closed','success');
+}
 
 function topUpLoanM(){
   if(!db.loans.filter(l=>l.st!=='closed').length){toast('No active loans for top-up','error');return;}
