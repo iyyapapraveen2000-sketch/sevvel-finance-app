@@ -952,8 +952,8 @@ function logout(){
 // ── NAV ──────────────────────────────────────────────────────
 function go(page){
   if(!CU) return;
-  if(['users','actlogs'].includes(page)&&!isAdmin()){permDenied();setAct(page);return;}
-  if(['partners','profit'].includes(page)&&CU.role==='staff'){permDenied();setAct(page);return;}
+  if(['users','actlogs'].includes(page)&&!isAdmin()){closeSB();permDenied();setAct(page);return;}
+  if(['partners','profit','audit'].includes(page)&&CU.role==='staff'){closeSB();permDenied();setAct(page);return;}
   setAct(page);
   document.getElementById('tbtl').textContent=pgNames[page]||page;
   closeSB(); document.getElementById('gsi').value='';
@@ -1234,10 +1234,14 @@ async function savePay() {
 
   if(pType==='preclose'){
     shouldClose=true;
+    l.amt = colTotal; // Adjusts principal so UI balance becomes ₹0
+    loanUpdates.amt = colTotal;
     addLog('collection','Pre-closed Loan #'+lid+' by '+l.cn,'Paid: '+R(amt)+penMsg);
     toast('Loan pre-closed! Paid: '+R(amt),'success');
   } else if(pType==='adjust'){
     shouldClose=true;
+    l.amt = colTotal; // Adjusts principal so UI balance becomes ₹0
+    loanUpdates.amt = colTotal;
     addLog('collection','Adjusted Loan #'+lid+' for '+l.cn,'Collected: '+R(amt)+' Written off: '+R(Math.max(0,totalDue-colTotal)));
     toast('Loan adjusted and closed','success');
   } else if(colTotal>=totalDue){
