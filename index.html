@@ -839,7 +839,6 @@ async function handleRT(payload) {
     await loadAll();
     var cur = document.querySelector('.ni.on');
     if(cur) go(cur.dataset.p||'dashboard');
-    toast('Updated by another user','info');
   }, 800);
 }
 
@@ -994,51 +993,41 @@ async function saveCust(eid) {
   var name   = document.getElementById('cN').value.trim();
   var ph     = document.getElementById('cP').value.trim();
   if (!name||!ph) { toast('Name and phone required','error'); return; }
+  if (!/^\d{10}$/.test(ph)) { toast('Phone must be exactly 10 digits','error'); return; }
   var aadhar = (document.getElementById('cAa')  && document.getElementById('cAa').value.trim())  || '';
+  if (aadhar && !/^\d{12}$/.test(aadhar)) { toast('Aadhar must be exactly 12 digits','error'); return; }
   var addr   = (document.getElementById('cA')   && document.getElementById('cA').value.trim())   || '';
   var note   = (document.getElementById('cNo')  && document.getElementById('cNo').value.trim())  || '';
-  var docEl  = document.getElementById('cDoc');
-  var docFile= docEl && docEl.files && docEl.files[0] ? docEl.files[0] : null;
 
-  function doSave(docB64, docName, docType) {
-    var doIt = async function() {
-      try {
-        if (eid) {
-          var updates = { name:name, ph:ph, addr:addr, note:note };
-          if (aadhar) updates.aadhar = aadhar;
-          if (docB64) { updates.doc=docB64; updates.doc_name=docName; updates.doc_type=docType; }
-          await sbUpdate('customers', eid, updates);
-          var cc = db.customers.find(function(x){return x.id===eid;});
-          if (cc) { cc.name=name; cc.ph=ph; cc.addr=addr; cc.note=note;
-            if(aadhar)cc.aadhar=aadhar;
-            if(docB64){cc.doc=docB64;cc.doc_name=docName;cc.doc_type=docType;} }
-          addLog('customer','Updated customer '+name,'ID: '+eid);
-        } else {
-          var newId = genSafeId('C', db.customers);
-          var row = {
-            id: newId, name: name, ph: ph, aadhar: aadhar||'',
-            addr: addr||'', note: note||'',
-            doc: docB64||'', doc_name: docName||'', doc_type: docType||''
-          };
-          await sbInsert('customers', row);
-          db.customers.push({
-            id: newId, name: name, ph: ph, aadhar: aadhar,
-            addr: addr, note: note,
-            doc: docB64||'', docName: docName||'', docType: docType||'', on: td()
-          });
-          addLog('customer','Added customer '+name,'ID: '+newId);
-        }
-        cM(); pgCust(); toast(eid?'Updated':'Customer added','success');
-      } catch(e) { console.error('saveCust error:', e); }
-    };
-    doIt();
-  }
+  var d1El = document.getElementById('cDoc1'), d2El = document.getElementById('cDoc2');
+  var f1 = d1El && d1El.files[0], f2 = d2El && d2El.files[0];
 
-  if (docFile) {
-    var reader = new FileReader();
-    reader.onload = function(e) { doSave(e.target.result, docFile.name, docFile.type); };
-    reader.readAsDataURL(docFile);
-  } else { doSave('','',''); }
+  const readF = f => new Promise(r => { const rd = new FileReader(); rd.onload=e=>r({b:e.target.result, n:f.name, t:f.type}); rd.readAsDataURL(f); });
+
+  showLoader(true);
+  try {
+    var obj1 = f1 ? await readF(f1) : null;
+    var obj2 = f2 ? await readF(f2) : null;
+    var updates = { name:name, ph:ph, addr:addr, note:note, aadhar:aadhar };
+    if (obj1) { updates.doc=obj1.b; updates.doc_name=obj1.n; updates.doc_type=obj1.t; }
+    if (obj2) { updates.doc2=obj2.b; updates.doc2_name=obj2.n; updates.doc2_type=obj2.t; }
+
+    if (eid) {
+      await sbUpdate('customers', eid, updates);
+      var cc = db.customers.find(function(x){return x.id===eid;});
+      if (cc) Object.assign(cc, updates);
+      addLog('customer','Updated customer '+name,'ID: '+eid);
+    } else {
+      var newId = genSafeId('C', db.customers);
+      updates.id = newId;
+      await sbInsert('customers', updates);
+      updates.on = td();
+      db.customers.push(updates);
+      addLog('customer','Added customer '+name,'ID: '+newId);
+    }
+    cM(); pgCust(); toast(eid?'Updated':'Customer added','success');
+  } catch(e) { console.error(e); toast('Save error','error'); }
+  showLoader(false);
 }
 
 async function delCust(id) {
@@ -1920,7 +1909,7 @@ function pgCust(s){
 
 function addCustM(){
   document.getElementById('mttl').textContent='Add Customer';
-  document.getElementById('mbd').innerHTML='<div class="fgrid">'+'<div class="fg"><label>NAME *</label><input id="cN" placeholder="Full name"></div>'+'<div class="fg"><label>PHONE *</label><input id="cP" type="tel" placeholder="10-digit"></div>'+'<div class="fg"><label>AADHAR NO</label><input id="cAa" type="text" maxlength="12" placeholder="12-digit Aadhar"></div>'+'<div class="fg"><label>DOCUMENT</label><input id="cDoc" type="file" accept="image/*,application/pdf" style="font-size:11px;padding:4px"></div>'+'<div class="fg full"><label>ADDRESS</label><input id="cA" placeholder="Full address"></div>'+'<div class="fg full"><label>NOTES</label><textarea id="cNo" rows="2" placeholder="Notes..."></textarea></div>'+'</div>';
+  document.getElementById('mbd').innerHTML='<div class="fgrid">'+'<div class="fg"><label>NAME *</label><input id="cN" placeholder="Full name"></div>'+'<div class="fg"><label>PHONE *</label><input id="cP" type="tel" placeholder="10-digit number" maxlength="10"></div>'+'<div class="fg"><label>AADHAR NO</label><input id="cAa" type="text" maxlength="12" placeholder="12-digit Aadhar"></div>'+'<div class="fg full"><label>ADDRESS</label><input id="cA" placeholder="Full address"></div>'+'<div class="fg"><label>AADHAR COPY</label><input id="cDoc1" type="file" accept="image/*,application/pdf" style="font-size:11px;padding:4px"></div>'+'<div class="fg"><label>AGREEMENT COPY</label><input id="cDoc2" type="file" accept="image/*,application/pdf" style="font-size:11px;padding:4px"></div>'+'<div class="fg full"><label>NOTES</label><textarea id="cNo" rows="2" placeholder="Notes..."></textarea></div>'+'</div>';
   document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Cancel</button><button class="btn btn-p" onclick="saveCust()">Save</button>';
   oM();
 }
@@ -1928,16 +1917,19 @@ function addCustM(){
 function editCustM(id){
   const c=db.customers.find(x=>x.id===id);
   document.getElementById('mttl').textContent='Edit Customer';
-  document.getElementById('mbd').innerHTML='<div class="fgrid">'+'<div class="fg"><label>NAME *</label><input id="cN" value="'+c.name+'"></div>'+'<div class="fg"><label>PHONE *</label><input id="cP" value="'+c.ph+'"></div>'+'<div class="fg"><label>AADHAR NO</label><input id="cAa" type="text" maxlength="12" value="'+(c.aadhar||'')+'" placeholder="12-digit Aadhar"></div>'+'<div class="fg"><label>DOCUMENT '+(c.doc?'<span style="color:var(--green);font-size:10px">(uploaded)</span>':'')+'</label><input id="cDoc" type="file" accept="image/*,application/pdf" style="font-size:11px;padding:4px"></div>'+'<div class="fg full"><label>ADDRESS</label><input id="cA" value="'+(c.addr||'')+'"></div>'+'<div class="fg full"><label>NOTES</label><textarea id="cNo" rows="2">'+(c.note||'')+'</textarea></div>'+'</div>';
-  document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Cancel</button>'+(c.doc?'<button class="btn btn-s" data-cid="'+id+'" onclick="viewDoc(this.dataset.cid)">📄 View Doc</button>':'')+'<button class="btn btn-p" data-cid="'+id+'" onclick="saveCust(this.dataset.cid)">Update</button>';
+  document.getElementById('mbd').innerHTML='<div class="fgrid">'+'<div class="fg"><label>NAME *</label><input id="cN" value="'+c.name+'"></div>'+'<div class="fg"><label>PHONE *</label><input id="cP" value="'+c.ph+'" maxlength="10"></div>'+'<div class="fg"><label>AADHAR NO</label><input id="cAa" type="text" maxlength="12" value="'+(c.aadhar||'')+'" placeholder="12-digit Aadhar"></div>'+'<div class="fg full"><label>ADDRESS</label><input id="cA" value="'+(c.addr||'')+'"></div>'+'<div class="fg"><label>AADHAR COPY '+(c.doc?'<span style="color:var(--green);font-size:10px">(uploaded)</span>':'')+'</label><input id="cDoc1" type="file" accept="image/*,application/pdf" style="font-size:11px;padding:4px"></div>'+'<div class="fg"><label>AGREEMENT COPY '+(c.doc2?'<span style="color:var(--green);font-size:10px">(uploaded)</span>':'')+'</label><input id="cDoc2" type="file" accept="image/*,application/pdf" style="font-size:11px;padding:4px"></div>'+'<div class="fg full"><label>NOTES</label><textarea id="cNo" rows="2">'+(c.note||'')+'</textarea></div>'+'</div>';
+  document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Cancel</button><button class="btn btn-p" data-cid="'+id+'" onclick="saveCust(this.dataset.cid)">Update</button>';
   oM();
 }
 
 function viewCust(id){
   const c=db.customers.find(x=>x.id===id);
   const loans=db.loans.filter(l=>l.cid===id);
-  const tcol=db.collections.filter(x=>x.cid===id).reduce((s,c)=>s+Number(c.amt),0);
-  let html='<div class="ldg">'  +'<div class="ld"><div class="ld-l">ID</div><div class="ld-v" style="color:var(--teal)">'+c.id+'</div></div>'  +'<div class="ld"><div class="ld-l">Phone</div><div class="ld-v">'+c.ph+'</div></div>'  +(c.aadhar?'<div class="ld"><div class="ld-l">Aadhar</div><div class="ld-v" style="font-family:var(--mono);letter-spacing:2px">'+c.aadhar+'</div></div>':'')  +'<div class="ld"><div class="ld-l">Total Borrowed</div><div class="ld-v" style="color:var(--gold)">'+R(loans.reduce((s,l)=>s+Number(l.amt),0))+'</div></div>'  +'<div class="ld"><div class="ld-l">Total Paid</div><div class="ld-v" style="color:var(--green)">'+R(tcol)+'</div></div>'  +'</div>'  +(c.addr?'<p style="font-size:12px;color:var(--muted);margin-bottom:12px">📍 '+c.addr+'</p>':'')  +(c.doc?'<div style="margin-bottom:12px"><button class="btn btn-s" style="font-size:12px" data-cid="'+c.id+'" onclick="viewDoc(this.dataset.cid)">📄 View Document — '+c.docName+'</button></div>':'')  +'<div style="font-size:13px;font-weight:700;margin-bottom:8px">Loans ('+loans.length+')</div>';
+  const tcol=db.collections.filter(x=>x.cid===id).reduce((s,col)=>s+Number(col.amt),0);
+  let html='<div class="ldg">'  +'<div class="ld"><div class="ld-l">ID</div><div class="ld-v" style="color:var(--teal)">'+c.id+'</div></div>'  +'<div class="ld"><div class="ld-l">Phone</div><div class="ld-v">'+c.ph+'</div></div>'  +(c.aadhar?'<div class="ld"><div class="ld-l">Aadhar</div><div class="ld-v" style="font-family:var(--mono);letter-spacing:2px">'+c.aadhar+'</div></div>':'')  +'<div class="ld"><div class="ld-l">Total Borrowed</div><div class="ld-v" style="color:var(--gold)">'+R(loans.reduce((s,l)=>s+Number(l.amt),0))+'</div></div>'  +'<div class="ld"><div class="ld-l">Total Paid</div><div class="ld-v" style="color:var(--green)">'+R(tcol)+'</div></div>'  +'</div>'  +(c.addr?'<p style="font-size:12px;color:var(--muted);margin-bottom:12px">📍 '+c.addr+'</p>':'')  
+  +(c.doc?'<div style="margin-bottom:6px"><button class="btn btn-s" style="font-size:12px;width:100%" data-cid="'+c.id+'" data-d="1" onclick="viewDoc(this.dataset.cid, this.dataset.d)">📄 View Aadhar — '+(c.doc_name||c.docName||'Document')+'</button></div>':'') 
+  +(c.doc2?'<div style="margin-bottom:12px"><button class="btn btn-s" style="font-size:12px;width:100%" data-cid="'+c.id+'" data-d="2" onclick="viewDoc(this.dataset.cid, this.dataset.d)">📄 View Agreement — '+(c.doc2_name||c.doc2Name||'Document')+'</button></div>':'') 
+  +'<div style="font-size:13px;font-weight:700;margin-bottom:8px">Loans ('+loans.length+')</div>';
   if(!loans.length)html+='<div class="empty"><p>No loans</p></div>';
   else loans.forEach(l=>{
     const col=db.collections.filter(x=>x.lid===l.id).reduce((s,c)=>s+Number(c.amt),0);
@@ -1950,15 +1942,23 @@ function viewCust(id){
   oM();
 }
 
-function viewDoc(id){
+function viewDoc(id, num){
   const c=db.customers.find(x=>x.id===id);
-  if(!c||!c.doc){toast('No document uploaded','error');return;}
-  const w=window.open('','_blank');
-  if(c.docType&&c.docType.startsWith('image')){
-    w.document.write('<html><body style="margin:0;background:#111"><img src="'+c.doc+'" style="max-width:100%;height:auto"></body></html>');
+  if(!c){toast('Customer not found','error');return;}
+  const doc = num==='2' ? c.doc2 : c.doc;
+  const docType = num==='2' ? (c.doc2_type||c.doc2Type||'') : (c.doc_type||c.docType||'');
+  if(!doc){toast('No document uploaded','error');return;}
+  document.getElementById('mttl').textContent='View Document';
+  let html = '<div style="text-align:center;background:#050505;border-radius:10px;padding:10px;min-height:50vh;display:flex;align-items:center;justify-content:center">';
+  if(docType.startsWith('image') || doc.startsWith('data:image')) {
+    html += '<img src="'+doc+'" style="max-width:100%;max-height:65vh;border-radius:8px">';
   } else {
-    w.document.write('<html><body style="margin:0"><embed src="'+c.doc+'" width="100%" height="100%" type="application/pdf"></body></html>');
+    html += '<iframe src="'+doc+'" style="width:100%;height:65vh;border:none;border-radius:8px;background:#fff"></iframe>';
   }
+  html += '</div>';
+  document.getElementById('mbd').innerHTML=html;
+  document.getElementById('mft').innerHTML='<button class="btn btn-p" style="width:100%" onclick="cM()">Close Viewer</button>';
+  oM();
 }
 
 function pgLoans(s){
@@ -2503,22 +2503,24 @@ function pgAudit(mode) {
   let d1 = document.getElementById('audD1') ? document.getElementById('audD1').value : aD(td(),-30);
   let d2 = document.getElementById('audD2') ? document.getElementById('audD2').value : td();
   
-  let lFilt = [], cFilt = [];
+  let lFilt = [], cFilt = [], logFilt = [];
   if(mode === 'monthly') {
      lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(mSel));
      cFilt = db.collections.filter(c => (c.date||'').startsWith(mSel));
+     logFilt = db.logs.filter(l => (l.ts||'').startsWith(mSel));
   } else if(mode === 'yearly') {
      lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(ySel));
      cFilt = db.collections.filter(c => (c.date||'').startsWith(ySel));
+     logFilt = db.logs.filter(l => (l.ts||'').startsWith(ySel));
   } else if(mode === 'custom') {
-     lFilt = db.loans.filter(l => {let d=(l.on||l.sd||''); return d>=d1 && d<=d2;});
-     cFilt = db.collections.filter(c => {let d=(c.date||''); return d>=d1 && d<=d2;});
+     lFilt = db.loans.filter(l => {let d=(l.on||l.sd||'').slice(0,10); return d>=d1 && d<=d2;});
+     cFilt = db.collections.filter(c => {let d=(c.date||'').slice(0,10); return d>=d1 && d<=d2;});
+     logFilt = db.logs.filter(l => {let d=(l.ts||'').slice(0,10); return d>=d1 && d<=d2;});
   }
 
   const disb = lFilt.reduce((s,l)=>s+Number(l.amt),0);
   const expectedInt = lFilt.reduce((s,l)=>s+Number(l.int||0),0);
   const expectedDc = lFilt.reduce((s,l)=>s+Number(l.dc||0),0);
-  
   const collAmt = cFilt.reduce((s,c)=>s+Number(c.amt||0),0);
   const collPen = cFilt.reduce((s,c)=>s+Number(c.pen||0),0);
 
@@ -2533,7 +2535,8 @@ function pgAudit(mode) {
   if(mode==='monthly') {
      html += '<div class="fg"><label>SELECT MONTH</label><input type="month" id="audM" value="'+mSel+'" onchange="pgAudit(\'monthly\')"></div>';
   } else if(mode==='yearly') {
-     html += '<div class="fg"><label>SELECT YEAR</label><input type="number" id="audY" value="'+ySel+'" min="2020" max="2050" onchange="pgAudit(\'yearly\')"></div>';
+     let yrs = ''; for(let y=2024;y<=2030;y++) yrs += '<option value="'+y+'"'+(ySel==y?' selected':'')+'>'+y+'</option>';
+     html += '<div class="fg"><label>SELECT YEAR</label><select id="audY" onchange="pgAudit(\'yearly\')" style="padding:10px 14px;border-radius:8px;background:var(--bg2);border:1px solid var(--bdr2);color:var(--txt)">'+yrs+'</select></div>';
   } else {
      html += '<div class="fg"><label>START DATE</label><input type="date" id="audD1" value="'+d1+'" onchange="pgAudit(\'custom\')"></div>';
      html += '<div class="fg"><label>END DATE</label><input type="date" id="audD2" value="'+d2+'" onchange="pgAudit(\'custom\')"></div>';
@@ -2549,10 +2552,12 @@ function pgAudit(mode) {
   html += '<div class="stat purple"><div class="stat-lbl">Total Income</div><div class="stat-val cp">'+R(expectedInt+expectedDc+collPen)+'</div></div>';
   html += '</div>';
   
-  html += '<div class="tc"><div class="th"><div class="tt">Activity in Period</div></div><div class="ts"><table><thead><tr><th>Type</th><th>Count</th><th>Total Value</th></tr></thead><tbody>';
-  html += '<tr><td>Loans Disbursed</td><td style="font-weight:700">'+lFilt.length+'</td><td class="am" style="color:var(--blue)">'+R(disb)+'</td></tr>';
-  html += '<tr><td>Collections Recorded</td><td style="font-weight:700">'+cFilt.length+'</td><td class="am" style="color:var(--green)">'+R(collAmt)+'</td></tr>';
-  html += '</tbody></table></div></div>';
+  html += '<div class="tc" style="max-height:400px;overflow-y:auto;border:1px solid var(--bdr)"><div class="th" style="position:sticky;top:0;background:var(--card);z-index:2;border-bottom:1px solid var(--bdr)"><div class="tt">Activity Logs in Period ('+logFilt.length+')</div></div><div style="padding:10px">';
+  if(!logFilt.length) html += '<div class="empty"><p>No activity found</p></div>';
+  logFilt.forEach(l => {
+     html+='<div class="log-row"><div class="ava" style="background:'+l.col+';width:28px;height:28px;font-size:11px;flex-shrink:0">'+(l.name?l.name[0]:'U')+'</div><div class="log-b"><div class="log-msg"><strong>'+l.name+'</strong> '+l.msg+'<span class="log-tag lt-'+l.action+'">'+l.action+'</span></div><div class="log-meta">'+l.ts+'</div></div></div>';
+  });
+  html += '</div></div>';
 
   document.getElementById('pg').innerHTML = html;
 }
