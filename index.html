@@ -530,13 +530,11 @@ table { min-width: 100%; }
 </head>
 <body>
 
-<!-- APP LOADER -->
 <div id="appLoader">
   <div class="ld-spin"></div>
   <div class="ld-txt">Loading Sevvel Finance...</div>
 </div>
 
-<!-- LOGIN -->
 <div id="loginPg">
   <div class="login-wrap">
     <div class="login-card">
@@ -562,7 +560,6 @@ table { min-width: 100%; }
   </div>
 </div>
 
-<!-- SHELL -->
 <div id="shell">
   <div class="ov" id="ov" onclick="closeSB()"></div>
   <nav class="sb" id="sb">
@@ -688,7 +685,6 @@ let CU = null;
 // ── SUPABASE HELPERS ─────────────────────────────────────────
 async function sbInsert(table, row) {
   try {
-    // Convert to plain JSON-safe object
     var plain = JSON.parse(JSON.stringify(row));
     var res = await SB.from(table).insert(plain);
     if (res && res.error) {
@@ -770,7 +766,6 @@ async function loadAll() {
     db.partners    = (p.data  || []);
     db.logs        = (lg.data || []);
 
-    // Map loans: DB columns -> UI cache fields
     db.loans = (l.data || []).map(function(row) {
       var schVal = row.sch;
       var schArr = [];
@@ -782,14 +777,14 @@ async function loadAll() {
         cn:         row.cn,
         tp:         row.tp,
         amt:        Number(row.amt   || 0),
-        int:        Number(row.interest || 0),  // DB: interest -> UI: int
+        int:        Number(row.interest || 0),
         dc:         Number(row.dc    || 0),
         dis:        Number(row.dis   || 0),
         dur:        Number(row.dur   || 0),
         sd:         row.sd  || '',
         md:         row.md  || '',
         st:         row.st  || 'active',
-        col:        Number(row.collected || 0), // DB: collected -> UI: col
+        col:        Number(row.collected || 0),
         emi:        row.emi ? Number(row.emi) : null,
         sch:        schArr,
         topupOf:    row.topup_of    || null,
@@ -868,7 +863,6 @@ function addLog(action, msg, detail) {
     };
     db.logs.unshift(entry);
     if (db.logs.length > 500) db.logs = db.logs.slice(0, 500);
-    // Fire and forget — never block UI
     sbInsert('logs', entry);
   } catch(e) {
     console.warn('addLog failed:', e);
@@ -901,10 +895,8 @@ async function doLogin(){
     {id:'U104',name:'Anand Kumar', un:'anand',  pw:'anand123',  role:'staff',  st:'active',col:'#c864ff',ll:null},
   ];
 
-  // Check hardcoded first
   var usr=FALLBACK_USERS.find(function(x){return x.un.toLowerCase()===u&&x.pw===p&&x.st==='active';});
 
-  // Try Supabase for non-hardcoded users
   if(!usr){
     showLoader(true);
     try{
@@ -923,7 +915,6 @@ async function doLogin(){
   errEl.style.display='none';
   CU=usr;
   var loginTime=nw(); usr.ll=loginTime;
-  // Silently update last login — don't block or show errors
   SB.from('users').update({ll:loginTime}).eq('id',usr.id).then(function(){}).catch(function(){});
 
   showLoader(true);
@@ -985,7 +976,6 @@ function refreshSB(){
 
 // ════════════════════════════════════════════════════════════════
 // SUPABASE DATA MUTATIONS
-// All DB writes go to Supabase; cache is updated immediately
 // ════════════════════════════════════════════════════════════════
 
 // ── CUSTOMERS ────────────────────────────────────────────────
@@ -1036,7 +1026,7 @@ async function delCust(id) {
   cConfirm('Delete this customer and all their data?', async function() {
     var cust = db.customers.find(x => x.id === id);
     if (!cust) return;
-    await sbDelete('customers', id); // cascade deletes loans + collections
+    await sbDelete('customers', id);
     db.customers = db.customers.filter(x => x.id !== id);
     db.loans       = db.loans.filter(x => x.cid !== id);
     db.collections = db.collections.filter(x => x.cid !== id);
@@ -1079,7 +1069,6 @@ async function saveLoan() {
   var ok = await sbInsert('loans', dbRow);
   if (!ok) return;
 
-  // Local cache uses UI field names
   db.loans.push({
     id:lid, cid:cid, cn:cust.name, tp:t,
     amt:amt, int:tint, dc:dc, dis:dis,
@@ -1096,7 +1085,7 @@ async function delLoan(id) {
   cConfirm('Delete loan '+id+' and all its collections?', async function() {
     var l = db.loans.find(x => x.id === id);
     if (!l) return;
-    await sbDelete('loans', id); // cascades collections
+    await sbDelete('loans', id); 
     db.loans       = db.loans.filter(x => x.id !== id);
     db.collections = db.collections.filter(x => x.lid !== id);
     addLog('delete','Deleted Loan #'+id,'Customer: '+(l.cn));
@@ -1110,8 +1099,9 @@ async function markClosed(id) {
   l.st = 'closed';
   await sbUpdate('loans', id, {st:'closed'});
   addLog('loan','Manually closed Loan #'+id, l.cn);
+  cM();
+  pgLoans();
   toast('Loan marked closed','success');
-  viewLoan(id);
 }
 
 // ── TOP-UP LOAN ───────────────────────────────────────────────
@@ -1227,7 +1217,6 @@ async function savePay() {
   l.sch=schArr; l.col=colTotal;
 
   var totalDue=(l.tp==='short')?(l.amt+Number(l.int||0)):l.amt;
-  // DB uses 'collected' and 'sch' column names
   var loanUpdates={collected:colTotal, sch:JSON.stringify(schArr)};
   var penMsg=pen>0?' + Penalty: '+R(pen):'';
   var shouldClose=false;
@@ -1422,9 +1411,7 @@ function impBK(el) {
       var d = JSON.parse(ev.target.result);
       if (!d.customers||!d.loans) { toast('Invalid backup file','error'); return; }
       cConfirm('Replace ALL current data with this backup? Cannot be undone.', async function() {
-        // Push to Supabase
         toast('Restoring... please wait','info');
-        // Simple approach: clear and re-insert
         db = {...db, ...d};
         toast('Backup data loaded into memory. Refresh to sync with Supabase.','success');
         go('dashboard');
@@ -1491,36 +1478,6 @@ async function changePw() {
   ['cp','np','np2'].forEach(function(id){ document.getElementById(id).value=''; });
 }
 
-// ── REPORTS ───────────────────────────────────────────────────
-function pgRep() {
-  var items = [
-    {t:'Daily Collections',   d:'Collections today',         id:'daily'},
-    {t:'Weekly Report',       d:'Last 7 days',               id:'weekly'},
-    {t:'Monthly Report',      d:'Current month',             id:'monthly'},
-    {t:'Customer Loans',      d:'All loans per customer',    id:'customer'},
-    {t:'Profit Report',       d:'Interest, DC & penalty',    id:'profit'},
-    {t:'Overdue Report',      d:'All overdue loans',         id:'overdue'},
-    {t:'Top-Up Loans',        d:'All top-up records',        id:'topup'},
-    {t:'Penalty Report',      d:'All penalty collections',   id:'penalty'},
-    {t:'DC Report',           d:'DC charges by loan',        id:'dc'},
-    {t:'Loan Schedule',       d:'Repayment schedules',       id:'schedule'},
-    {t:'User Activity',       d:'Activity log (Admin)',      id:'useractivity'},
-  ];
-  var html = '<div class="shead"><div class="sti">Reports</div></div>'
-  +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">';
-  items.forEach(function(r){
-    html += '<div class="tc"><div style="padding:16px">'
-    +'<div style="font-weight:700;margin-bottom:4px">'+r.t+'</div>'
-    +'<div style="font-size:12px;color:var(--muted);margin-bottom:12px">'+r.d+'</div>'
-    +'<div style="display:flex;gap:7px">'
-    +'<button class="btn btn-p btn-sm" data-rid="'+r.id+'" data-act="view" onclick="genRep(this.dataset.rid,this.dataset.act)">View</button>'
-    +'<button class="btn btn-s btn-sm" data-rid="'+r.id+'" data-act="csv" onclick="genRep(this.dataset.rid,this.dataset.act)">CSV</button>'
-    +'</div></div></div>';
-  });
-  html += '</div>';
-  document.getElementById('pg').innerHTML = html;
-}
-
 // ── ACTIVITY LOGS ─────────────────────────────────────────────
 async function clearLogs() {
   cConfirm('Delete logs older than 30 days?', async function() {
@@ -1531,6 +1488,18 @@ async function clearLogs() {
     toast('Cleared '+(before-db.logs.length)+' old logs','info');
     pgLogs();
   });
+}
+
+async function restoreLogs() {
+  if (!isAdmin()) return;
+  showLoader(true);
+  try {
+     var r = await SB.from('logs').select('*').order('created_at', {ascending:false});
+     if (r.data) db.logs = r.data;
+     toast('All historical logs restored from database', 'success');
+     pgLogs();
+  } catch(e) { toast('Error restoring logs', 'error'); }
+  showLoader(false);
 }
 
 async function exportLogs() {
@@ -1552,7 +1521,7 @@ async function exportLogs() {
   document.addEventListener('keydown', function(e){ if(e.key==='Escape') cM(); });
 })();
 
-// ── UI FUNCTIONS (unchanged from original) ──────────────────────
+// ── UI FUNCTIONS ───────────────────────────────────────────────
 
 function dashModal(type){
   let title='',html='';
@@ -1703,7 +1672,7 @@ function chitFundModal(){
   oM();
 }
 
-function saveChitEntry(){
+async function saveChitEntry(){
   if(!isAdmin()){toast('Admin only','error');return;}
   if(!db.cfg.chit)db.cfg.chit={entries:[],chitBalance:0};
   const type=document.getElementById('cfType').value;
@@ -1715,19 +1684,20 @@ function saveChitEntry(){
   if(type==='add')db.cfg.chit.chitBalance=(db.cfg.chit.chitBalance||0)+amt;
   else if(type==='taken')db.cfg.chit.chitBalance=(db.cfg.chit.chitBalance||0)-amt;
   else if(type==='returned')db.cfg.chit.chitBalance=(db.cfg.chit.chitBalance||0)+amt;
+  await SB.from('config').upsert({ key:'chit', value: JSON.stringify(db.cfg.chit) });
   addLog('settings','Chit fund '+type+': '+R(amt),'Balance: '+R(db.cfg.chit.chitBalance));
-  saveDB();cM();toast('Chit entry saved','success');
-  // Reopen chit panel as modal after save
+  cM();toast('Chit entry saved','success');
   setTimeout(()=>dashModal('chit'),100);
 }
 
 function delChitEntry(idx){
-  cConfirm('Delete this chit fund entry?', function(){
+  cConfirm('Delete this chit fund entry?', async function(){
     var e=db.cfg.chit.entries[idx];
     if(e.type==='add'||e.type==='returned') db.cfg.chit.chitBalance-=Number(e.amt);
     else if(e.type==='taken') db.cfg.chit.chitBalance+=Number(e.amt);
     db.cfg.chit.entries.splice(idx,1);
-    saveDB(); toast('Entry deleted','info');
+    await SB.from('config').upsert({ key:'chit', value: JSON.stringify(db.cfg.chit) });
+    toast('Entry deleted','info');
     chitFundModal();
   });
 }
@@ -1739,18 +1709,14 @@ function pgDash(){
   var tla=db.loans.reduce(function(s,l){return s+Number(l.amt);},0);
   var tday=db.collections.filter(function(c){return c.date===td();}).reduce(function(s,c){return s+Number(c.amt);},0);
   
-  // Auto-mark overdue in memory (md < today and not closed)
   db.loans.forEach(function(l){
     if(l.st==='active' && l.md && l.md < td()) {
       l.st='overdue';
-      // Silently update in Supabase
       SB.from('loans').update({st:'overdue'}).eq('id',l.id).then(function(){}).catch(function(){});
     }
   });
   var ovL=db.loans.filter(function(l){return l.st==='overdue';});
-  // Due today: active loans maturing today
   var dueTodayL=db.loans.filter(function(l){return l.st==='active'&&l.md===td();});
-  // Due this week: active loans maturing in next 1-7 days (not today)
   var weekEnd=aD(td(),7);
   var dueL=db.loans.filter(function(l){return l.st==='active'&&l.md>td()&&l.md<=weekEnd;});
   var topupL=db.loans.filter(function(l){return l.topupOf;});
@@ -1858,36 +1824,6 @@ function pgLogs(fa='',fu=''){
   document.getElementById('pg').innerHTML=html;
 }
 
-function exportLogs(){
-  const rows=[['Time','User','Username','Role','Action','Message','Detail'],...db.logs.map(l=>[l.ts,l.name,l.un,l.role,l.action,l.msg,l.detail])];
-  const csv=rows.map(r=>r.map(v=>'"'+v+'"').join(',')).join('\n');
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='logs_'+td()+'.csv';a.click();
-  toast('Logs exported','success');
-}
-
-async function clearLogs() {
-  cConfirm('Delete logs older than 30 days?', async function() {
-    var cut = aD(td(),-30);
-    var before = db.logs.length;
-    await SB.from('logs').delete().lt('created_at', new Date(cut).toISOString());
-    db.logs = db.logs.filter(function(l){ return l.ts && l.ts.slice(0,10) >= cut; });
-    toast('Cleared '+(before-db.logs.length)+' old logs','info');
-    pgLogs();
-  });
-}
-
-async function restoreLogs() {
-  if (!isAdmin()) return;
-  showLoader(true);
-  try {
-     var r = await SB.from('logs').select('*').order('created_at', {ascending:false});
-     if (r.data) db.logs = r.data;
-     toast('All historical logs restored from database', 'success');
-     pgLogs();
-  } catch(e) { toast('Error restoring logs', 'error'); }
-  showLoader(false);
-}
-
 function pgCust(s){
   s=s||'';
   var list=db.customers.filter(function(c){return !s||c.name.toLowerCase().includes(s.toLowerCase())||c.ph.includes(s)||c.id.includes(s)||(c.aadhar&&c.aadhar.includes(s));});
@@ -1988,7 +1924,6 @@ function renderLT(list){
     var col=db.collections.filter(function(c){return c.lid===l.id;}).reduce(function(s,c){return s+Number(c.amt);},0);
     var pct=l.amt>0?Math.min(100,Math.round(col/l.amt*100)):0;
     var cr=l.by?db.users.find(function(u){return u.un===l.by;}):null;
-    if(l.md<td()&&l.st==='active'){l.st='overdue';saveDB();}
     html+='<tr style="'+(l.st==='overdue'?'background:rgba(255,71,87,.03)':'')+'">';
     html+='<td style="font-family:var(--mono);font-size:11px;color:var(--blue)">'+l.id+(l.topupOf?'<span style="font-size:9px;background:var(--teal);color:#000;border-radius:4px;padding:1px 4px;margin-left:4px">TU</span>':'')+'</td>';
     html+='<td><strong>'+l.cn+'</strong></td>';
@@ -2088,7 +2023,6 @@ function viewLoan(id){
   if(l.sch&&l.sch.length){
     var paidCount=l.sch.filter(function(s){return s.p;}).length;
     var isMonthly=(l.tp==='monthly');
-    // For monthly: show note that all months except last are interest-only
     var schNote=isMonthly
       ? '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;padding:8px 10px;background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.15);border-radius:7px">📌 Monthly Interest only each month. Final month = Interest + Principal.</div>'
       : '';
@@ -2123,17 +2057,6 @@ function viewLoan(id){
   +(l.st!=='closed'?'<button class="btn btn-p" data-lid="'+l.id+'" onclick="cM();payModal(this.dataset.lid)">Record Payment</button>':'')
   +(l.st!=='closed'&&bal<=0?'<button class="btn btn-s" data-lid="'+l.id+'" onclick="markClosed(this.dataset.lid)">Mark Closed</button>':'');
   oM();
-}
-
-async function markClosed(id) {
-  var l = db.loans.find(x => x.id === id);
-  if (!l) return;
-  l.st = 'closed';
-  await sbUpdate('loans', id, {st:'closed'});
-  addLog('loan','Manually closed Loan #'+id, l.cn);
-  cM();
-  pgLoans();
-  toast('Loan marked closed','success');
 }
 
 function topUpLoanM(){
@@ -2188,17 +2111,14 @@ function calcTU(){
   const cEl  = document.getElementById('tucalc');
   if(!lid||!amt||!dur){if(cEl)cEl.style.display='none';return;}
   const t = tp||orig.tp;
-  // Outstanding balance on old loan
   const oldPaid = db.collections.filter(x=>x.lid===lid).reduce((s,x)=>s+Number(x.amt),0);
   const oldBal  = Math.max(0, orig.amt - oldPaid);
-  // Gross amount disbursed from new loan (after deductions)
   let gross=0, md='';
   if(t==='daily'){gross=amt-int-dc; md=aD(sd,dur);}
   else if(t==='weekly'){gross=amt-int-dc; md=aW(sd,dur);}
   else if(t==='monthly'){gross=amt-dc; md=aM(sd,dur);}
   else if(t==='short'){gross=amt; md=aD(sd,dur);}
   else{gross=amt; md=aM(sd,dur);}
-  // Settlement: use gross to close old loan first
   const settleAmt   = Math.min(oldBal, gross);
   const customerGet = Math.max(0, gross - oldBal);
   const html=
@@ -2225,470 +2145,6 @@ function calcTU(){
   if(cEl){cEl.style.display='';document.getElementById('tucalcr').innerHTML=html;}
 }
 
-function pgColl(){
-  const actL=db.loans.filter(l=>l.st!=='closed');
-  let html='<div class="shead"><div><div class="sti">Collections</div><div class="ssu">Record payments</div></div><button class="btn btn-p" onclick="payModal()">➕ Record Payment</button></div>'
-  +'<div class="stats" style="margin-bottom:12px">'
-  +'<div class="stat teal"><div class="stat-lbl">Today</div><div class="stat-val ct" style="font-size:16px">'+R(db.collections.filter(c=>c.date===td()).reduce((s,c)=>s+Number(c.amt),0))+'</div></div>'
-  +'<div class="stat green"><div class="stat-lbl">This Month</div><div class="stat-val cg" style="font-size:16px">'+R(db.collections.filter(c=>c.date.slice(0,7)===td().slice(0,7)).reduce((s,c)=>s+Number(c.amt),0))+'</div></div>'
-  +'<div class="stat gold"><div class="stat-lbl">Total</div><div class="stat-val cgo" style="font-size:16px">'+R(db.collections.reduce((s,c)=>s+Number(c.amt),0))+'</div></div>'
-  +'<div class="stat orange"><div class="stat-lbl">Penalty Total</div><div class="stat-val co" style="font-size:16px">'+R(db.collections.reduce((s,c)=>s+Number(c.pen||0),0))+'</div></div>'
-  +'<div class="stat red"><div class="stat-lbl">Overdue</div><div class="stat-val cr">'+db.loans.filter(l=>l.st==='overdue').length+'</div></div>'
-  +'</div>'
-  +'<div class="tc" style="margin-bottom:12px"><div class="th"><div class="tt">Active Loan Status</div></div><div class="ts"><table><thead><tr><th>Loan ID</th><th>Customer</th><th>Type</th><th>Principal</th><th>Collected</th><th>Balance</th><th>Maturity</th><th>Status</th><th>Pay</th></tr></thead><tbody>';
-  actL.forEach(l=>{
-    const col=db.collections.filter(c=>c.lid===l.id).reduce((s,c)=>s+Number(c.amt),0);
-    const bal=l.amt-col;
-    if(l.md<td()&&l.st!=='closed'){l.st='overdue';saveDB();}
-    html+='<tr style="'+(l.st==='overdue'?'background:rgba(255,71,87,.03)':'')+'">'
-    +'<td style="font-family:var(--mono);font-size:11px;color:var(--blue)">'+l.id+'</td>'
-    +'<td><strong>'+l.cn+'</strong></td>'
-    +'<td><span class="badge '+ltb(l.tp)+'" style="font-size:10px">'+ltl(l.tp)+'</span></td>'
-    +'<td class="am">'+R(l.amt)+'</td>'
-    +'<td class="am amp">'+R(col)+'</td>'
-    +'<td class="am" style="color:'+(bal<=0?'var(--green)':'var(--red)')+'">'+R(Math.max(0,bal))+'</td>'
-    +'<td style="font-size:11px">'+l.md+'</td>'
-    +'<td><span class="badge '+stb(l.st)+'" style="font-size:10px">'+l.st+'</span></td>'
-    +'<td><button class="btn btn-sm btn-p" data-lid="'+l.id+'" onclick="payModal(this.dataset.lid)">Pay</button></td></tr>';
-  });
-  html+='</tbody></table></div></div>'
-  +'<div class="tc"><div class="th"><div class="tt">Collection History</div>'
-  +'<input type="date" style="background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:6px 9px;font-size:12px !important;color:var(--txt);outline:none" onchange="filterCols(this.value)"></div>'
-  +'<div class="ts"><table><thead><tr><th>Date</th><th>Loan</th><th>Customer</th><th>Amount</th><th>By</th><th>Note</th>'+(isAdmin()?'<th>Del</th>':'')+'</tr></thead><tbody id="colhist">'+renderCols(db.collections.slice().reverse())+'</tbody></table></div></div>';
-  document.getElementById('pg').innerHTML=html;
-}
-
-function renderCols(cols){
-  if(!cols.length)return'<tr><td colspan="8"><div class="empty"><p>No collections</p></div></td></tr>';
-  return cols.map(function(c){
-    var rec=c.by?db.users.find(function(u){return u.un===c.by;}):null;
-    return'<tr>'
-    +'<td style="font-size:11px">'+c.date+'</td>'
-    +'<td style="font-family:var(--mono);font-size:11px;color:var(--blue)">'+c.lid+'</td>'
-    +'<td><strong>'+c.cn+'</strong></td>'
-    +'<td class="am amp">'+R(c.amt)+'</td>'
-    +'<td class="am" style="font-size:11px;color:var(--red)">'+(c.pen&&Number(c.pen)>0?'Rs '+R(c.pen):'-')+'</td>'
-    +'<td>'+(rec?'<div style="display:flex;align-items:center;gap:4px"><div class="ava" style="background:'+rec.col+';width:20px;height:20px;font-size:8px">'+rec.name[0]+'</div><span style="font-size:10px;color:var(--muted)">'+rec.name.split(' ')[0]+'</span></div>':'<span style="font-size:10px;color:var(--dim)">'+(c.by||'-')+'</span>')+'</td>'
-    +'<td style="font-size:11px;color:var(--muted)">'+(c.note||'-')+'</td>'
-    +(isAdmin()?'<td><button class="btn btn-sm btn-d" data-cid="'+c.id+'" onclick="delCol(this.dataset.cid)">Del</button></td>':'')
-    +'</tr>';
-  }).join('');
-}
-
-function filterCols(d){document.getElementById('colhist').innerHTML=renderCols(d?db.collections.filter(c=>c.date===d).reverse():db.collections.slice().reverse());}
-
-function payModal(lid){
-  lid=lid||'';
-  document.getElementById('mttl').textContent='Record Payment';
-  var activeLoans=db.loans.filter(function(l){return l.st!=='closed';});
-  var loanOpts=activeLoans.map(function(l){
-    return '<option value="'+l.id+'"'+(l.id===lid?' selected':'')+'>'+l.id+' — '+l.cn+' ('+R(l.amt)+')</option>';
-  }).join('');
-
-  document.getElementById('mbd').innerHTML=
-    '<div class="fgrid">'
-    +'<div class="fg full"><label>LOAN *</label>'
-    +'<select id="pL" onchange="onPayL()"><option value="">Select loan...</option>'+loanOpts+'</select></div>'
-    +'<div class="fg"><label>DATE *</label><input id="pD" type="date" value="'+td()+'"></div>'
-    +'<div class="fg"><label>PAYMENT TYPE</label>'
-    +'<select id="pType" onchange="onPayType()">'
-    +'<option value="regular">Regular Payment</option>'
-    +'<option value="preclose">Pre-Close (Full Settlement)</option>'
-    +'<option value="adjust">Adjust Bill (Write-off Balance)</option>'
-    +'</select></div>'
-    +'<div class="fg"><label>AMOUNT (₹) *</label><input id="pA" type="number" placeholder="0" min="0"></div>'
-    +'<div class="fg"><label>PENALTY (₹)</label><input id="pPen" type="number" placeholder="0" value="0" min="0"></div>'
-    +'<div class="fg full"><label>NOTE</label><input id="pN" placeholder="Payment note..."></div>'
-    +'</div>'
-    +'<div id="pInfo" class="calc" style="display:none"></div>'
-    +'<div id="pPrecloseInfo" style="display:none;margin-top:10px;padding:12px;background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.2);border-radius:10px"></div>'
-    +'<div id="pAdjustInfo" style="display:none;margin-top:10px;padding:12px;background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.2);border-radius:10px"></div>';
-
-  document.getElementById('mft').innerHTML=
-    '<button class="btn btn-s" onclick="cM()">Cancel</button>'
-    +'<button class="btn btn-p" onclick="savePay()">Record Payment</button>';
-  oM();
-  if(lid) setTimeout(onPayL, 80);
-}
-
-function onPayType(){
-  var pType=document.getElementById('pType').value;
-  var lid=document.getElementById('pL').value;
-  var pci=document.getElementById('pPrecloseInfo');
-  var pai=document.getElementById('pAdjustInfo');
-  if(pci) pci.style.display='none';
-  if(pai) pai.style.display='none';
-  if(!lid) return;
-  var l=db.loans.find(function(x){return x.id===lid;});
-  if(!l) return;
-  var col=db.collections.filter(function(c){return c.lid===lid;}).reduce(function(s,c){return s+Number(c.amt);},0);
-  var totalDue=(l.tp==='short')?(l.amt+Number(l.int||0)):l.amt;
-  var bal=Math.max(0,totalDue-col);
-  // For monthly: outstanding = remaining months * monthly interest + principal
-  var monthlyInterest=Number(l.int||0);
-  var paidMonths=db.collections.filter(function(c){return c.lid===lid;}).length;
-  var remainingMonths=Math.max(0,l.dur-paidMonths);
-  var monthlyBal=(l.tp==='monthly')?(remainingMonths*monthlyInterest+l.amt):bal;
-
-  if(pType==='preclose'){
-    document.getElementById('pA').value=bal;
-    document.getElementById('pN').value='Pre-closure settlement - '+lid;
-    if(pci){
-      pci.style.display='';
-      pci.innerHTML='<div style="font-weight:700;color:var(--teal);margin-bottom:8px">🔒 Pre-Close Settlement</div>'
-        +'<div class="crow"><span>Principal Outstanding</span><span style="color:var(--red);font-weight:700">'+R(l.amt-col>0?l.amt-col:0)+'</span></div>'
-        +(l.tp==='monthly'?'<div class="crow"><span>Interest Remaining ('+remainingMonths+' months)</span><span style="color:var(--gold)">'+R(remainingMonths*monthlyInterest)+'</span></div>':'')
-        +'<div class="crow" style="font-weight:700;font-size:15px;border-top:1px solid var(--bdr);padding-top:8px;margin-top:4px"><span>Total to Pre-Close</span><span style="color:var(--teal)">'+R(l.tp==="monthly"?monthlyBal:bal)+'</span></div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-top:6px">Customer pays this amount to fully close the loan today.</div>';
-      document.getElementById('pA').value=(l.tp==='monthly'?monthlyBal:bal);
-    }
-  } else if(pType==='adjust'){
-    if(pai){
-      pai.style.display='';
-      pai.innerHTML='<div style="font-weight:700;color:var(--gold);margin-bottom:8px">✏️ Adjust Bill (Write-off)</div>'
-        +'<div class="crow"><span>Total Outstanding</span><span style="color:var(--red)">'+R(bal)+'</span></div>'
-        +'<div class="crow"><span>Amount Collected</span><span style="color:var(--green)">'+R(col)+'</span></div>'
-        +'<div class="crow"><span>Balance Being Written Off</span><span style="color:var(--gold);font-weight:700">'+R(bal)+'</span></div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-top:6px">Enter the amount customer is actually paying. Remaining balance will be written off and loan closed.</div>';
-    }
-  }
-}
-
-function onPayL(){
-  var lid=document.getElementById('pL').value;
-  if(!lid){document.getElementById('pInfo').style.display='none';return;}
-  var l=db.loans.find(function(x){return x.id===lid;});
-  var col=db.collections.filter(function(c){return c.lid===lid;}).reduce(function(s,c){return s+Number(c.amt);},0);
-  var totalDue=(l.tp==='short')?(l.amt+Number(l.int||0)):l.amt;
-  var bal=Math.max(0,totalDue-col);
-  var sug=0;
-  if(l.tp==='daily')        sug=+(l.amt/l.dur).toFixed(2);
-  else if(l.tp==='weekly')  sug=+(l.amt/l.dur).toFixed(2);
-  else if(l.tp==='emi')     sug=l.emi||0;
-  else if(l.tp==='monthly') sug=Number(l.int||0);
-  else if(l.tp==='short')   sug=l.amt+Number(l.int||0);
-  else                      sug=bal;
-  var payAmt=bal>0?Math.min(sug,bal):sug;
-  document.getElementById('pA').value=payAmt||'';
-  var colNum=db.collections.filter(function(c){return c.lid===lid;}).length+1;
-  var autoNote='';
-  if(l.tp==='daily')        autoNote='Day '+colNum+' collection - '+lid;
-  else if(l.tp==='weekly')  autoNote='Week '+colNum+' collection - '+lid;
-  else if(l.tp==='monthly') autoNote='Month '+colNum+' interest - '+lid;
-  else if(l.tp==='short')   autoNote='Short term repayment - '+lid+' (Principal+Interest)';
-  else if(l.tp==='emi')     autoNote='EMI '+colNum+' - '+lid;
-  else                      autoNote='Payment for '+lid;
-  var nEl=document.getElementById('pN');
-  if(nEl&&(!nEl.value||nEl.dataset.auto==='1')){nEl.value=autoNote;nEl.dataset.auto='1';}
-  if(nEl&&!nEl._nh){nEl._nh=1;nEl.addEventListener('input',function(){nEl.dataset.auto='0';},{once:true});}
-  var infoEl=document.getElementById('pInfo');
-  infoEl.style.display='';
-  var info='<div class="ctitle">Loan '+lid+' - '+l.cn+'</div>';
-  info+='<div class="crow"><span>Type</span><span>'+ltl(l.tp)+'</span></div>';
-  info+='<div class="crow"><span>Principal</span><span>'+R(l.amt)+'</span></div>';
-  if(l.tp==='short'&&l.int){
-    info+='<div class="crow"><span>Interest (at maturity)</span><span style="color:var(--gold)">+'+R(l.int)+'</span></div>';
-    info+='<div class="crow" style="font-weight:700;border-top:1px solid var(--bdr);padding-top:6px"><span>Total Due</span><span style="color:var(--orange,#ff6b35)">'+R(totalDue)+'</span></div>';
-  } else if(l.int){
-    info+='<div class="crow"><span>Interest</span><span style="color:var(--gold)">'+R(l.int)+'</span></div>';
-  }
-  info+='<div class="crow"><span>Collected So Far</span><span style="color:var(--green)">'+R(col)+'</span></div>';
-  info+='<div class="crow"><span>Balance Remaining</span><span style="color:'+(bal>0?'var(--red)':'var(--green)')+'">'+R(bal)+'</span></div>';
-  info+='<div class="crow" style="background:rgba(0,212,170,.12);border-radius:6px;padding:8px 10px;margin-top:4px"><span style="font-weight:700">Suggested Payment</span><span style="color:var(--teal);font-weight:800;font-size:15px">'+R(payAmt)+'</span></div>';
-  infoEl.innerHTML=info;
-}
-
-function pgPart(){
-  if(CU.role==='staff'){permDenied();return;}
-  const ti=db.loans.reduce((s,l)=>s+Number(l.int),0);
-  const tinv=db.partners.reduce((s,p)=>s+Number(p.inv),0);
-  let html='<div class="shead"><div><div class="sti">Partners</div><div class="ssu">'+db.partners.length+' partners · '+R(tinv)+' capital</div></div>'
-  +(isAdmin()?'<button class="btn btn-p" onclick="addPartM()">➕ Add Partner</button>':'')
-  +'</div><div class="pgrid">';
-  if(!db.partners.length)html+='<div class="empty" style="grid-column:1/-1"><div class="empty-ic">🤝</div><p>No partners yet</p></div>';
-  else db.partners.forEach(p=>{
-    const pr=Math.round(ti*(p.sh/100));
-    html+='<div class="pcard">'
-    +'<div class="ava" style="background:'+p.col+';width:44px;height:44px;font-size:18px;margin-bottom:10px">'+p.name[0]+'</div>'
-    +'<div style="font-size:14px;font-weight:700">'+p.name+'</div>'
-    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+p.sh+'% profit share</div>'
-    +'<div class="pmini">'
-    +'<div class="pst"><div class="pst-l">Investment</div><div class="pst-v">'+R(p.inv)+'</div></div>'
-    +'<div class="pst"><div class="pst-l">Profit</div><div class="pst-v" style="color:var(--gold)">'+R(pr)+'</div></div>'
-    +'</div>'
-    +(isAdmin()?'<div style="display:flex;gap:6px;margin-top:10px"><button class="btn btn-sm btn-s" style="flex:1" data-pid="'+p.id+'" onclick="editPartM(this.dataset.pid)">Edit</button><button class="btn btn-sm btn-d" data-pid="'+p.id+'" onclick="delPart(this.dataset.pid)">Del</button></div>':'')
-    +'</div>';
-  });
-  html+='</div>'
-  +'<div class="tc" style="margin-top:14px"><div class="th"><div class="tt">Summary</div></div><div class="ts"><table><thead><tr><th>Partner</th><th>Investment</th><th>Share</th><th>Profit</th></tr></thead><tbody>'
-  +db.partners.map(p=>'<tr><td><strong>'+p.name+'</strong></td><td class="am">'+R(p.inv)+'</td><td><span class="badge b-act">'+p.sh+'%</span></td><td class="am amp">'+R(Math.round(ti*(p.sh/100)))+'</td></tr>').join('')
-  +'<tr style="font-weight:700"><td>Total</td><td class="am" style="color:var(--gold)">'+R(tinv)+'</td><td>100%</td><td class="am amp">'+R(ti)+'</td></tr>'
-  +'</tbody></table></div></div>';
-  document.getElementById('pg').innerHTML=html;
-}
-
-function addPartM(eid){
-  const p=eid?db.partners.find(x=>x.id===eid):null;
-  document.getElementById('mttl').textContent=eid?'Edit Partner':'Add Partner';
-  document.getElementById('mbd').innerHTML='<div class="fgrid">'
-  +'<div class="fg"><label>NAME *</label><input id="pN" placeholder="Partner name" value="'+(p?p.name:'')+'"></div>'
-  +'<div class="fg"><label>INVESTMENT (₹) *</label><input id="pI" type="number" value="'+(p?p.inv:'')+'"></div>'
-  +'<div class="fg"><label>PROFIT SHARE % *</label><input id="pS" type="number" value="'+(p?p.sh:'')+'"></div>'
-  +'<div class="fg"><label>COLOR</label><select id="pC">'
-  +'<option value="#00d4aa" '+(p&&p.col==='#00d4aa'?'selected':'')+'>🟢 Teal</option>'
-  +'<option value="#0099ff" '+(p&&p.col==='#0099ff'?'selected':'')+'>🔵 Blue</option>'
-  +'<option value="#f5c842" '+(p&&p.col==='#f5c842'?'selected':'')+'>🟡 Gold</option>'
-  +'<option value="#ff6b35" '+(p&&p.col==='#ff6b35'?'selected':'')+'>🟠 Orange</option>'
-  +'<option value="#c864ff" '+(p&&p.col==='#c864ff'?'selected':'')+'>🟣 Purple</option>'
-  +'</select></div>'
-  +'</div>';
-  document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Cancel</button><button class="btn btn-p" onclick="savePart()">Save</button>';
-  window._partEid=eid||'';
-  oM();
-}
-
-function editPartM(id){addPartM(id);}
-
-function pgProfit(){
-  if(CU.role==='staff'){permDenied();return;}
-  const ti=db.loans.reduce((s,l)=>s+Number(l.int||0),0);
-  const tdc=db.loans.reduce((s,l)=>s+Number(l.dc||0),0);
-  const tpen=db.collections.reduce((s,c)=>s+Number(c.pen||0),0);
-  const tinv=db.partners.reduce((s,p)=>s+Number(p.inv),0);
-  const tcol=db.collections.reduce((s,c)=>s+Number(c.amt),0);
-  const tmon=db.collections.filter(c=>c.date.slice(0,7)===td().slice(0,7)).reduce((s,c)=>s+Number(c.amt),0);
-  const tla=db.loans.reduce((s,l)=>s+Number(l.amt),0);
-  const tbal=db.loans.filter(l=>l.st!=='closed').reduce((s,l)=>{const col=db.collections.filter(c=>c.lid===l.id).reduce((x,c)=>x+Number(c.amt),0);return s+Math.max(0,l.amt-col);},0);
-  const tprofit=ti+tdc+tpen;
-  const chitBal=(db.cfg.chit&&db.cfg.chit.chitBalance)||0;
-  let html='<div class="shead"><div class="sti">Profit & Analytics</div></div>'  +'<div class="stats">'  +'<div class="stat gold"><div class="stat-ic">💹</div><div class="stat-lbl">Total Interest</div><div class="stat-val cgo" style="font-size:16px">'+R(ti)+'</div></div>'  +'<div class="stat orange"><div class="stat-ic">🏷️</div><div class="stat-lbl">Total DC</div><div class="stat-val co" style="font-size:16px">'+R(tdc)+'</div></div>'  +'<div class="stat red"><div class="stat-ic">⚡</div><div class="stat-lbl">Total Penalty</div><div class="stat-val cr" style="font-size:16px">'+R(tpen)+'</div></div>'  +'<div class="stat purple"><div class="stat-ic">🎯</div><div class="stat-lbl">Total Profit</div><div class="stat-val cp" style="font-size:16px">'+R(tprofit)+'</div></div>'  +'<div class="stat green"><div class="stat-ic">📥</div><div class="stat-lbl">Total Collected</div><div class="stat-val cg" style="font-size:16px">'+R(tcol)+'</div></div>'  +'<div class="stat blue"><div class="stat-ic">🏦</div><div class="stat-lbl">Total Capital</div><div class="stat-val cb" style="font-size:16px">'+R(tinv)+'</div></div>'  +'<div class="stat teal"><div class="stat-ic">📅</div><div class="stat-lbl">This Month</div><div class="stat-val ct" style="font-size:16px">'+R(tmon)+'</div></div>'  +'<div class="stat teal"><div class="stat-ic">💼</div><div class="stat-lbl">Outstanding</div><div class="stat-val ct" style="font-size:16px">'+R(tbal)+'</div></div>'  +(chitBal?'<div class="stat green"><div class="stat-ic">🏺</div><div class="stat-lbl">Chit Fund</div><div class="stat-val cg" style="font-size:16px">'+R(chitBal)+'</div></div>':'')  +'</div>'  +'<div class="charts">'  +'<div class="cbox"><div class="cttl">📈 Monthly Collections</div><div class="cwrap"><canvas id="pch"></canvas></div></div>'  +'<div class="cbox"><div class="cttl">💹 Interest vs DC vs Penalty</div><div class="cwrap"><canvas id="pch2"></canvas></div></div>'  +'</div>'  +'<div class="tc" style="margin-bottom:14px"><div class="th"><div class="tt">Loan-wise Interest & DC Breakdown</div></div>'  +'<div class="ts"><table><thead><tr><th>Loan</th><th>Customer</th><th>Type</th><th>Principal</th><th>Interest</th><th>DC</th><th>Penalty</th><th>Total Income</th><th>Status</th></tr></thead><tbody>'  +db.loans.map(l=>{
-    const lpen=db.collections.filter(c=>c.lid===l.id).reduce((s,c)=>s+Number(c.pen||0),0);
-    const income=Number(l.int||0)+Number(l.dc||0)+lpen;
-    return'<tr><td style="font-family:var(--mono);font-size:11px;color:var(--blue)">'+l.id+'</td>'    +'<td><strong>'+l.cn+'</strong></td>'    +'<td><span class="badge '+ltb(l.tp)+'" style="font-size:10px">'+ltl(l.tp)+'</span></td>'    +'<td class="am">'+R(l.amt)+'</td>'    +'<td class="am" style="color:var(--gold)">'+R(l.int||0)+'</td>'    +'<td class="am" style="color:var(--orange,#ff6b35)">'+R(l.dc||0)+'</td>'    +'<td class="am" style="color:var(--red)">'+R(lpen)+'</td>'    +'<td class="am amp" style="font-weight:700">'+R(income)+'</td>'    +'<td><span class="badge '+stb(l.st)+'" style="font-size:10px">'+l.st+'</span></td>'    +'</tr>';
-  }).join('')  +'</tbody></table></div></div>'  +'<div class="tc" style="margin-bottom:14px"><div class="th"><div class="tt">📅 Monthly Summary (Income)</div></div>'
-  +'<div class="ts"><table><thead><tr><th>Month</th><th>Collections</th><th>Interest</th><th>DC</th><th>Penalty</th><th>Total Income</th></tr></thead><tbody>'
-  +(function(){
-    var mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    var mData=Array(12).fill(0).map(function(){return{col:0,int:0,dc:0,pen:0};});
-    db.collections.forEach(function(c){var m=new Date(c.date).getMonth();if(!isNaN(m)){mData[m].col+=Number(c.amt);mData[m].pen+=Number(c.pen||0);}});
-    db.loans.forEach(function(l){var m=new Date(l.on||td()).getMonth();if(!isNaN(m)){mData[m].int+=Number(l.int||0);mData[m].dc+=Number(l.dc||0);}});
-    return mData.map(function(d,i){
-      var income=d.int+d.dc+d.pen;
-      if(!d.col&&!income)return '';
-      return '<tr><td style="font-size:12px">'+mo[i]+'</td><td class="am amp">'+R(d.col)+'</td><td class="am" style="color:var(--gold)">'+R(d.int)+'</td><td class="am" style="color:#ff6b35">'+R(d.dc)+'</td><td class="am" style="color:var(--red)">'+R(d.pen)+'</td><td class="am" style="font-weight:700;color:var(--green)">'+R(income)+'</td></tr>';
-    }).filter(Boolean).join('');
-  })()
-  +'</tbody></table></div></div>'
-  +(function(){
-    var mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    var mData=Array(12).fill(0).map(function(){return{col:0,int:0,dc:0,pen:0};});
-    db.collections.forEach(function(c){var m=new Date(c.date).getMonth();if(!isNaN(m)){mData[m].col+=Number(c.amt);mData[m].pen+=Number(c.pen||0);}});
-    db.loans.forEach(function(l){var m=new Date(l.on||td()).getMonth();if(!isNaN(m)){mData[m].int+=Number(l.int||0);mData[m].dc+=Number(l.dc||0);}});
-    var rows=mData.map(function(d,i){var income=d.int+d.dc+d.pen;if(!d.col&&!income)return '';return '<tr><td style="font-size:12px">'+mo[i]+'</td><td class="am amp">'+R(d.col)+'</td><td class="am" style="color:var(--gold)">'+R(d.int)+'</td><td class="am" style="color:#ff6b35">'+R(d.dc)+'</td><td class="am" style="color:var(--red)">'+R(d.pen)+'</td><td class="am" style="font-weight:700;color:var(--green)">'+R(income)+'</td></tr>';}).filter(Boolean).join('');
-    if(!rows)return '';
-    return '<div class="tc" style="margin-bottom:14px"><div class="th"><div class="tt">📅 Monthly Summary</div></div><div class="ts"><table><thead><tr><th>Month</th><th>Collections</th><th>Interest</th><th>DC</th><th>Penalty</th><th>Income</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
-  })()
-    +'<div class="tc"><div class="th"><div class="tt">Partner Distribution</div></div><div class="ts"><table><thead><tr><th>Partner</th><th>Investment</th><th>Share %</th><th>Profit Share</th><th>Monthly Est.</th></tr></thead><tbody>'  +db.partners.map(p=>'<tr><td><strong>'+p.name+'</strong></td><td class="am">'+R(p.inv)+'</td><td><span class="badge b-act">'+p.sh+'%</span></td><td class="am amp">'+R(Math.round(tprofit*(p.sh/100)))+'</td><td class="am" style="color:var(--blue)">'+R(Math.round(tmon*(p.sh/100)))+'</td></tr>').join('')  +'</tbody></table></div></div>';
-  document.getElementById('pg').innerHTML=html;
-  setTimeout(()=>{
-    const mo=['J','F','M','A','M','J','J','A','S','O','N','D'];
-    const md=Array(12).fill(0);db.collections.forEach(c=>{md[new Date(c.date).getMonth()]+=Number(c.amt);});
-    new Chart(document.getElementById('pch'),{type:'bar',data:{labels:mo,datasets:[{label:'Collections',data:md,backgroundColor:'rgba(0,212,170,.5)',borderColor:'var(--teal)',borderWidth:1,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8a9bbf'},grid:{display:false}},y:{ticks:{color:'#8a9bbf',callback:v=>'₹'+v.toLocaleString('en-IN')},grid:{color:'rgba(255,255,255,.05)'}}}}});
-    const intM=Array(12).fill(0),dcM=Array(12).fill(0),penM=Array(12).fill(0);
-    db.loans.forEach(l=>{const m=new Date(l.on||td()).getMonth();intM[m]+=Number(l.int||0);dcM[m]+=Number(l.dc||0);});
-    db.collections.forEach(c=>{if(c.pen)penM[new Date(c.date).getMonth()]+=Number(c.pen);});
-    new Chart(document.getElementById('pch2'),{type:'bar',data:{labels:mo,datasets:[{label:'Interest',data:intM,backgroundColor:'rgba(245,200,66,.7)'},{label:'DC',data:dcM,backgroundColor:'rgba(255,107,53,.7)'},{label:'Penalty',data:penM,backgroundColor:'rgba(255,71,87,.7)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8a9bbf',font:{size:9},padding:8,boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:'#8a9bbf'},grid:{display:false}},y:{stacked:true,ticks:{color:'#8a9bbf',callback:v=>'₹'+v.toLocaleString('en-IN')},grid:{color:'rgba(255,255,255,.05)'}}}}});
-  },80);
-}
-
-function pgAudit(mode) {
-  if(!isAdmin() && !isPart()) { permDenied(); return; }
-  mode = mode || 'monthly';
-  let mSel = document.getElementById('audM') ? document.getElementById('audM').value : td().slice(0,7);
-  let ySel = document.getElementById('audY') ? document.getElementById('audY').value : td().slice(0,4);
-  let d1 = document.getElementById('audD1') ? document.getElementById('audD1').value : aD(td(),-30);
-  let d2 = document.getElementById('audD2') ? document.getElementById('audD2').value : td();
-  
-  let lFilt = [], cFilt = [], logFilt = [];
-  if(mode === 'monthly') {
-     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(mSel));
-     cFilt = db.collections.filter(c => (c.date||'').startsWith(mSel));
-     logFilt = db.logs.filter(l => (l.ts||'').startsWith(mSel));
-  } else if(mode === 'yearly') {
-     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(ySel));
-     cFilt = db.collections.filter(c => (c.date||'').startsWith(ySel));
-     logFilt = db.logs.filter(l => (l.ts||'').startsWith(ySel));
-  } else if(mode === 'custom') {
-     lFilt = db.loans.filter(l => {let d=(l.on||l.sd||'').slice(0,10); return d>=d1 && d<=d2;});
-     cFilt = db.collections.filter(c => {let d=(c.date||'').slice(0,10); return d>=d1 && d<=d2;});
-     logFilt = db.logs.filter(l => {let d=(l.ts||'').slice(0,10); return d>=d1 && d<=d2;});
-  }
-
-  const disb = lFilt.reduce((s,l)=>s+Number(l.amt),0);
-  const expectedInt = lFilt.reduce((s,l)=>s+Number(l.int||0),0);
-  const expectedDc = lFilt.reduce((s,l)=>s+Number(l.dc||0),0);
-  const collAmt = cFilt.reduce((s,c)=>s+Number(c.amt||0),0);
-  const collPen = cFilt.reduce((s,c)=>s+Number(c.pen||0),0);
-
-  let html = '<div class="shead"><div><div class="sti">🧾 Audit Reports</div><div class="ssu">Detailed financial breakdown</div></div>'
-    +'<button class="btn btn-p" onclick="downloadAuditPDF(\''+mode+'\')">📄 Download PDF</button></div>';
-  html += '<div class="pills">'
-    +'<span class="pill '+(mode==='monthly'?'on':'')+'" onclick="pgAudit(\'monthly\')">Monthly</span>'
-    +'<span class="pill '+(mode==='yearly'?'on':'')+'" onclick="pgAudit(\'yearly\')">Yearly</span>'
-    +'<span class="pill '+(mode==='custom'?'on':'')+'" onclick="pgAudit(\'custom\')">Custom Date</span>'
-    +'</div>';
-
-  html += '<div class="tc" style="padding:14px;display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;background:var(--card);flex-wrap:wrap">';
-  if(mode==='monthly') {
-     html += '<div class="fg"><label>SELECT MONTH</label><input type="month" id="audM" value="'+mSel+'" onchange="pgAudit(\'monthly\')"></div>';
-  } else if(mode==='yearly') {
-     let yrs = ''; for(let y=2024;y<=2030;y++) yrs += '<option value="'+y+'"'+(ySel==y?' selected':'')+'>'+y+'</option>';
-     html += '<div class="fg"><label>SELECT YEAR</label><select id="audY" onchange="pgAudit(\'yearly\')" style="padding:10px 14px;border-radius:8px;background:var(--bg2);border:1px solid var(--bdr2);color:var(--txt)">'+yrs+'</select></div>';
-  } else {
-     html += '<div class="fg"><label>START DATE</label><input type="date" id="audD1" value="'+d1+'" onchange="pgAudit(\'custom\')"></div>';
-     html += '<div class="fg"><label>END DATE</label><input type="date" id="audD2" value="'+d2+'" onchange="pgAudit(\'custom\')"></div>';
-  }
-  html += '</div>';
-
-  html += '<div class="stats">';
-  html += '<div class="stat blue"><div class="stat-lbl">Loans Disbursed</div><div class="stat-val cb">'+R(disb)+'</div></div>';
-  html += '<div class="stat gold"><div class="stat-lbl">Interest (Expected)</div><div class="stat-val cgo">'+R(expectedInt)+'</div></div>';
-  html += '<div class="stat orange"><div class="stat-lbl">DC (Expected)</div><div class="stat-val co">'+R(expectedDc)+'</div></div>';
-  html += '<div class="stat green"><div class="stat-lbl">Total Collected</div><div class="stat-val cg">'+R(collAmt)+'</div></div>';
-  html += '<div class="stat red"><div class="stat-lbl">Penalty Collected</div><div class="stat-val cr">'+R(collPen)+'</div></div>';
-  html += '<div class="stat purple"><div class="stat-lbl">Total Income</div><div class="stat-val cp">'+R(expectedInt+expectedDc+collPen)+'</div></div>';
-  html += '</div>';
-  
-  html += '<div class="tc" style="max-height:400px;overflow-y:auto;border:1px solid var(--bdr)"><div class="th" style="position:sticky;top:0;background:var(--card);z-index:2;border-bottom:1px solid var(--bdr)"><div class="tt">Activity Logs in Period ('+logFilt.length+')</div></div><div style="padding:10px">';
-  if(!logFilt.length) html += '<div class="empty"><p>No activity found</p></div>';
-  logFilt.forEach(l => {
-     html+='<div class="log-row"><div class="ava" style="background:'+l.col+';width:28px;height:28px;font-size:11px;flex-shrink:0">'+(l.name?l.name[0]:'U')+'</div><div class="log-b"><div class="log-msg"><strong>'+l.name+'</strong> '+l.msg+'<span class="log-tag lt-'+l.action+'">'+l.action+'</span></div><div class="log-meta">'+l.ts+'</div></div></div>';
-  });
-  html += '</div></div>';
-
-  document.getElementById('pg').innerHTML = html;
-}
-
-function downloadAuditPDF(mode) {
-  let mSel = document.getElementById('audM') ? document.getElementById('audM').value : td().slice(0,7);
-  let ySel = document.getElementById('audY') ? document.getElementById('audY').value : td().slice(0,4);
-  let d1 = document.getElementById('audD1') ? document.getElementById('audD1').value : aD(td(),-30);
-  let d2 = document.getElementById('audD2') ? document.getElementById('audD2').value : td();
-  
-  let lFilt = [];
-  let periodTitle = '';
-  if(mode === 'monthly') {
-     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(mSel));
-     periodTitle = 'Monthly Audit - ' + mSel;
-  } else if(mode === 'yearly') {
-     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(ySel));
-     periodTitle = 'Yearly Audit - ' + ySel;
-  } else if(mode === 'custom') {
-     lFilt = db.loans.filter(l => {let d=(l.on||l.sd||'').slice(0,10); return d>=d1 && d<=d2;});
-     periodTitle = 'Custom Audit (' + d1 + ' to ' + d2 + ')';
-  }
-
-  let tableRows = '';
-  let totAmt=0, totPaid=0, totBal=0;
-
-  lFilt.forEach(l => {
-     let col = db.collections.filter(c => c.lid === l.id).reduce((s,c) => s+Number(c.amt||0), 0);
-     let bal = Math.max(0, l.amt - col);
-     totAmt += l.amt; totPaid += col; totBal += bal;
-     tableRows += '<tr>'
-       +'<td style="padding:8px;border:1px solid #ddd">'+(l.on||l.sd)+'</td>'
-       +'<td style="padding:8px;border:1px solid #ddd;font-family:monospace;color:#0099ff">'+l.id+'</td>'
-       +'<td style="padding:8px;border:1px solid #ddd"><strong>'+l.cn+'</strong></td>'
-       +'<td style="padding:8px;border:1px solid #ddd;text-align:right">₹'+l.amt.toLocaleString('en-IN')+'</td>'
-       +'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:green;font-weight:bold">₹'+col.toLocaleString('en-IN')+'</td>'
-       +'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:red;font-weight:bold">₹'+bal.toLocaleString('en-IN')+'</td>'
-     +'</tr>';
-  });
-
-  tableRows += '<tr style="font-weight:900;background:#f5f5f5;font-size:16px">'
-    +'<td colspan="3" style="padding:12px;border:1px solid #ddd;text-align:right">TOTALS</td>'
-    +'<td style="padding:12px;border:1px solid #ddd;text-align:right">₹'+totAmt.toLocaleString('en-IN')+'</td>'
-    +'<td style="padding:12px;border:1px solid #ddd;text-align:right;color:green">₹'+totPaid.toLocaleString('en-IN')+'</td>'
-    +'<td style="padding:12px;border:1px solid #ddd;text-align:right;color:red">₹'+totBal.toLocaleString('en-IN')+'</td>'
-  +'</tr>';
-
-  let printWindow = window.open('', '_blank');
-  let htmlDoc = '<html><head><title>Audit Report - Sevvel Finance</title>'
-    +'<style>body{font-family:Arial,sans-serif;padding:30px;color:#333} h2{color:#00d4aa;margin-bottom:5px} table{width:100%;border-collapse:collapse;margin-top:25px;font-size:14px} th{background:#111520;color:#fff;padding:12px;text-align:left;border:1px solid #444} td{border:1px solid #ddd}</style>'
-    +'</head><body>'
-    +'<h2>Sevvel Finance - Detailed Audit Report</h2>'
-    +'<p style="margin:0"><strong>Period:</strong> '+periodTitle+'</p>'
-    +'<p style="margin:5px 0 0 0"><strong>Generated On:</strong> '+new Date().toLocaleString()+'</p>'
-    +'<table><thead><tr><th>Date Disbursed</th><th>Loan ID</th><th>Customer Name</th><th style="text-align:right">Loan Amount</th><th style="text-align:right">Paid Up To Now</th><th style="text-align:right">Pending Balance</th></tr></thead>'
-    +'<tbody>'+tableRows+'</tbody></table>'
-    +'<script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); };</script>'
-    +'</body></html>';
-    
-  printWindow.document.write(htmlDoc);
-  printWindow.document.close();
-}
-
-function pgRep(){
-  var items=[
-    {t:'Daily Collections',i:'D',d:'Collections today',id:'daily'},
-    {t:'Weekly Report',i:'W',d:'Last 7 days',id:'weekly'},
-    {t:'Monthly Report',i:'M',d:'Current month',id:'monthly'},
-    {t:'Customer Loans',i:'C',d:'All loans per customer',id:'customer'},
-    {t:'Profit Report',i:'P',d:'Interest, DC & penalty',id:'profit'},
-    {t:'Overdue Report',i:'O',d:'All overdue loans',id:'overdue'},
-    {t:'Top-Up Loans',i:'T',d:'All top-up records',id:'topup'},
-    {t:'Penalty Report',i:'Pen',d:'All penalty collections',id:'penalty'},
-    {t:'DC Report',i:'DC',d:'DC charges by loan',id:'dc'},
-    {t:'Loan Schedule',i:'Sch',d:'Repayment schedules',id:'schedule'},
-    {t:'User Activity',i:'UA',d:'Activity log (Admin)',id:'useractivity'},
-  ];
-  var html='<div class="shead"><div class="sti">Reports</div></div>'
-  +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">';
-  items.forEach(function(r){
-    html+='<div class="tc"><div style="padding:16px">'
-    +'<div style="font-weight:700;margin-bottom:4px">'+r.t+'</div>'
-    +'<div style="font-size:12px;color:var(--muted);margin-bottom:12px">'+r.d+'</div>'
-    +'<div style="display:flex;gap:7px">'
-    +'<button class="btn btn-p btn-sm" data-rid="'+r.id+'" data-act="view" onclick="genRep(this.dataset.rid,this.dataset.act)">View</button>'
-    +'<button class="btn btn-s btn-sm" data-rid="'+r.id+'" data-act="csv" onclick="genRep(this.dataset.rid,this.dataset.act)">CSV</button>'
-    +'</div></div></div>';
-  });
-  html+='</div>';
-  document.getElementById('pg').innerHTML=html;
-}
-
-function genRep(type,action){
-  if(type==='useractivity'&&!isAdmin()){toast('Admin only','error');return;}
-  let rows=[],title='',headers=[];
-  if(type==='daily'){title='Daily '+td();headers=['Date','ID','Loan','Customer','Amount','By'];rows=db.collections.filter(c=>c.date===td()).map(c=>[c.date,c.id,c.lid,c.cn,c.amt,c.by||'']);}
-  else if(type==='weekly'){const wa=aD(td(),-7);title='Weekly';headers=['Date','ID','Loan','Customer','Amount','By'];rows=db.collections.filter(c=>c.date>=wa).map(c=>[c.date,c.id,c.lid,c.cn,c.amt,c.by||'']);}
-  else if(type==='monthly'){const m=td().slice(0,7);title='Monthly '+m;headers=['Date','ID','Loan','Customer','Amount','By'];rows=db.collections.filter(c=>c.date.slice(0,7)===m).map(c=>[c.date,c.id,c.lid,c.cn,c.amt,c.by||'']);}
-  else if(type==='customer'){title='Customer Loans';headers=['Cust ID','Name','Phone','Loan','Type','Amount','Interest','Status'];rows=db.loans.map(l=>{const c=db.customers.find(x=>x.id===l.cid);return[l.cid,l.cn,c?c.ph:'',l.id,ltl(l.tp),l.amt,l.int,l.st];});}
-
-  else if(type==='overdue'){title='Overdue Loans';headers=['Loan','Customer','Phone','Amount','Collected','Balance','Maturity'];rows=db.loans.filter(l=>l.st==='overdue').map(l=>{const c=db.customers.find(x=>x.id===l.cid),col=db.collections.filter(x=>x.lid===l.id).reduce((s,c)=>s+Number(c.amt),0);return[l.id,l.cn,c?c.ph:'',l.amt,col,l.amt-col,l.md];});}
-  else if(type==='useractivity'){title='Activity';headers=['Time','User','Username','Role','Action','Message','Detail'];rows=db.logs.map(l=>[l.ts,l.name,l.un,l.role,l.action,l.msg,l.detail||'']);}
-  else if(type==='topup'){title='Top-Up Loans';headers=['Loan ID','Top-Up Of','Customer','Type','Amount','Interest','DC','Disbursed','Status','Date'];rows=db.loans.filter(l=>l.topupOf).map(l=>[l.id,l.topupOf,l.cn,ltl(l.tp),l.amt,l.int||0,l.dc||0,l.dis,l.st,l.on]);}
-  else if(type==='penalty'){title='Penalty Collections';headers=['Date','Collection ID','Loan','Customer','Payment','Penalty','By','Note'];rows=db.collections.filter(c=>c.pen&&Number(c.pen)>0).map(c=>[c.date,c.id,c.lid,c.cn,c.amt,c.pen,c.by||'',c.note||'']);}
-  else if(type==='dc'){title='DC Charges';headers=['Loan ID','Customer','Type','Principal','DC Charge','Disbursed','Status'];rows=db.loans.filter(l=>Number(l.dc||0)>0).map(l=>[l.id,l.cn,ltl(l.tp),l.amt,l.dc||0,l.dis,l.st]);}
-  else if(type==='schedule'){title='Loan Schedules';headers=['Loan','Customer','Type','Installment#','Due Date','Amount','Paid'];rows=db.loans.filter(l=>l.sch&&l.sch.length).flatMap(l=>l.sch.map(s=>[l.id,l.cn,ltl(l.tp),s.n,s.d,s.a,s.p?'Yes':'No']));}
-  else if(type==='profit'){title='Profit Report';headers=['Loan','Customer','Type','Principal','Interest','DC','Penalty','Total Income','Status'];rows=db.loans.map(l=>{const lpen=db.collections.filter(c=>c.lid===l.id).reduce((s,c)=>s+Number(c.pen||0),0);return[l.id,l.cn,ltl(l.tp),l.amt,l.int||0,l.dc||0,lpen,Number(l.int||0)+Number(l.dc||0)+lpen,l.st];});}
-  if(action==='csv'){
-    const csv=[headers,...rows].map(r=>r.map(v=>'"'+v+'"').join(',')).join('\n');
-    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=type+'_'+td()+'.csv';a.click();
-    toast('CSV exported','success');
-  } else {
-    const tot=headers.includes('Amount')?rows.reduce((s,r)=>s+Number(r[headers.indexOf('Amount')]||0),0):null;
-    let html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:12px;color:var(--muted)">'+rows.length+' records</span>'+(tot!==null?'<span class="am amp" style="font-size:15px">'+R(tot)+'</span>':'')+'</div>'
-    +'<div class="ts" style="max-height:360px"><table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'
-    +(!rows.length?'<tr><td colspan="'+headers.length+'"><div class="empty"><p>No data</p></div></td></tr>':rows.map(r=>'<tr>'+r.map(v=>'<td style="font-size:11px">'+v+'</td>').join('')+'</tr>').join(''))
-    +'</tbody></table></div>';
-    document.getElementById('mttl').textContent=title;
-    document.getElementById('mbd').innerHTML=html;
-    document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Close</button><button class="btn btn-p" data-rt="'+type+'" data-act="csv" onclick="genRep(this.dataset.rt,this.dataset.act)">Export CSV</button>';
-    oM();
-  }
-}
-
 function pgSet(){
   let html=''
   +(isAdmin()?'<div class="ss"><div class="ss-ttl">Company Settings</div><div class="fg" style="max-width:400px;margin-bottom:12px"><label>COMPANY NAME</label><input id="sCo" value="'+(db.cfg.company||'Sevvel Finance')+'"></div><button class="btn btn-p" onclick="saveCfg()">Save</button></div>':'')
@@ -2702,7 +2158,7 @@ function pgSet(){
   +'<div class="fg"><label>CONFIRM NEW PASSWORD</label><input id="np2" type="password" placeholder="Repeat"></div>'
   +'</div><button class="btn btn-p" style="margin-top:12px" onclick="changePw()">Change Password</button></div>'
   +'<div class="ss"><div class="ss-ttl">About</div>'
-  +'<div class="ss-row"><span>App Version</span><strong>Sevvel Finance v2.1</strong></div>'
+  +'<div class="ss-row"><span>App Version</span><strong>Sevvel Finance v3.0 Pro</strong></div>'
   +'<div class="ss-row"><span>Your Role</span><strong>'+rll(CU.role)+'</strong></div>'
   +'<div class="ss-row"><span>Loan Types</span><strong>Daily · Weekly · Monthly · Short Term · EMI</strong></div>'
   +'</div>';
@@ -2874,6 +2330,162 @@ function uLogsModal(uid){
   oM();
 }
 
+function pgAudit(mode) {
+  if(!isAdmin() && !isPart()) { permDenied(); return; }
+  mode = mode || 'monthly';
+  let mSel = document.getElementById('audM') ? document.getElementById('audM').value : td().slice(0,7);
+  let ySel = document.getElementById('audY') ? document.getElementById('audY').value : td().slice(0,4);
+  let d1 = document.getElementById('audD1') ? document.getElementById('audD1').value : aD(td(),-30);
+  let d2 = document.getElementById('audD2') ? document.getElementById('audD2').value : td();
+  
+  let lFilt = [], cFilt = [], logFilt = [];
+  if(mode === 'monthly') {
+     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(mSel));
+     cFilt = db.collections.filter(c => (c.date||'').startsWith(mSel));
+     logFilt = db.logs.filter(l => (l.ts||'').startsWith(mSel));
+  } else if(mode === 'yearly') {
+     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(ySel));
+     cFilt = db.collections.filter(c => (c.date||'').startsWith(ySel));
+     logFilt = db.logs.filter(l => (l.ts||'').startsWith(ySel));
+  } else if(mode === 'custom') {
+     lFilt = db.loans.filter(l => {let d=(l.on||l.sd||'').slice(0,10); return d>=d1 && d<=d2;});
+     cFilt = db.collections.filter(c => {let d=(c.date||'').slice(0,10); return d>=d1 && d<=d2;});
+     logFilt = db.logs.filter(l => {let d=(l.ts||'').slice(0,10); return d>=d1 && d<=d2;});
+  }
+
+  const disb = lFilt.reduce((s,l)=>s+Number(l.amt),0);
+  const expectedInt = lFilt.reduce((s,l)=>s+Number(l.int||0),0);
+  const expectedDc = lFilt.reduce((s,l)=>s+Number(l.dc||0),0);
+  const collAmt = cFilt.reduce((s,c)=>s+Number(c.amt||0),0);
+  const collPen = cFilt.reduce((s,c)=>s+Number(c.pen||0),0);
+
+  let html = '<div class="shead"><div><div class="sti">🧾 Audit Reports</div><div class="ssu">Detailed financial breakdown</div></div>'
+    +'<button class="btn btn-p" onclick="downloadAuditPDF(\''+mode+'\')">📄 Download PDF</button></div>';
+  html += '<div class="pills">'
+    +'<span class="pill '+(mode==='monthly'?'on':'')+'" onclick="pgAudit(\'monthly\')">Monthly</span>'
+    +'<span class="pill '+(mode==='yearly'?'on':'')+'" onclick="pgAudit(\'yearly\')">Yearly</span>'
+    +'<span class="pill '+(mode==='custom'?'on':'')+'" onclick="pgAudit(\'custom\')">Custom Date</span>'
+    +'</div>';
+
+  html += '<div class="tc" style="padding:14px;display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;background:var(--card);flex-wrap:wrap">';
+  if(mode==='monthly') {
+     html += '<div class="fg"><label>SELECT MONTH</label><input type="month" id="audM" value="'+mSel+'" onchange="pgAudit(\'monthly\')"></div>';
+  } else if(mode==='yearly') {
+     let yrs = ''; for(let y=2024;y<=2030;y++) yrs += '<option value="'+y+'"'+(ySel==y?' selected':'')+'>'+y+'</option>';
+     html += '<div class="fg"><label>SELECT YEAR</label><select id="audY" onchange="pgAudit(\'yearly\')" style="padding:10px 14px;border-radius:8px;background:var(--bg2);border:1px solid var(--bdr2);color:var(--txt)">'+yrs+'</select></div>';
+  } else {
+     html += '<div class="fg"><label>START DATE</label><input type="date" id="audD1" value="'+d1+'" onchange="pgAudit(\'custom\')"></div>';
+     html += '<div class="fg"><label>END DATE</label><input type="date" id="audD2" value="'+d2+'" onchange="pgAudit(\'custom\')"></div>';
+  }
+  html += '</div>';
+
+  html += '<div class="stats">';
+  html += '<div class="stat blue"><div class="stat-lbl">Loans Disbursed</div><div class="stat-val cb">'+R(disb)+'</div></div>';
+  html += '<div class="stat gold"><div class="stat-lbl">Interest (Expected)</div><div class="stat-val cgo">'+R(expectedInt)+'</div></div>';
+  html += '<div class="stat orange"><div class="stat-lbl">DC (Expected)</div><div class="stat-val co">'+R(expectedDc)+'</div></div>';
+  html += '<div class="stat green"><div class="stat-lbl">Total Collected</div><div class="stat-val cg">'+R(collAmt)+'</div></div>';
+  html += '<div class="stat red"><div class="stat-lbl">Penalty Collected</div><div class="stat-val cr">'+R(collPen)+'</div></div>';
+  html += '<div class="stat purple"><div class="stat-lbl">Total Income</div><div class="stat-val cp">'+R(expectedInt+expectedDc+collPen)+'</div></div>';
+  html += '</div>';
+  
+  html += '<div class="tc" style="max-height:400px;overflow-y:auto;border:1px solid var(--bdr)"><div class="th" style="position:sticky;top:0;background:var(--card);z-index:2;border-bottom:1px solid var(--bdr)"><div class="tt">Activity Logs in Period ('+logFilt.length+')</div></div><div style="padding:10px">';
+  if(!logFilt.length) html += '<div class="empty"><p>No activity found</p></div>';
+  logFilt.forEach(l => {
+     html+='<div class="log-row"><div class="ava" style="background:'+l.col+';width:28px;height:28px;font-size:11px;flex-shrink:0">'+(l.name?l.name[0]:'U')+'</div><div class="log-b"><div class="log-msg"><strong>'+l.name+'</strong> '+l.msg+'<span class="log-tag lt-'+l.action+'">'+l.action+'</span></div><div class="log-meta">'+l.ts+'</div></div></div>';
+  });
+  html += '</div></div>';
+
+  document.getElementById('pg').innerHTML = html;
+}
+
+function downloadAuditPDF(mode) {
+  let mSel = document.getElementById('audM') ? document.getElementById('audM').value : td().slice(0,7);
+  let ySel = document.getElementById('audY') ? document.getElementById('audY').value : td().slice(0,4);
+  let d1 = document.getElementById('audD1') ? document.getElementById('audD1').value : aD(td(),-30);
+  let d2 = document.getElementById('audD2') ? document.getElementById('audD2').value : td();
+  
+  let lFilt = [];
+  let periodTitle = '';
+  if(mode === 'monthly') {
+     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(mSel));
+     periodTitle = 'Monthly Audit - ' + mSel;
+  } else if(mode === 'yearly') {
+     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(ySel));
+     periodTitle = 'Yearly Audit - ' + ySel;
+  } else if(mode === 'custom') {
+     lFilt = db.loans.filter(l => {let d=(l.on||l.sd||'').slice(0,10); return d>=d1 && d<=d2;});
+     periodTitle = 'Custom Audit (' + d1 + ' to ' + d2 + ')';
+  }
+
+  let tableRows = '';
+  let totAmt=0, totPaid=0, totBal=0;
+
+  lFilt.forEach(l => {
+     let col = db.collections.filter(c => c.lid === l.id).reduce((s,c) => s+Number(c.amt||0), 0);
+     let bal = Math.max(0, l.amt - col);
+     totAmt += l.amt; totPaid += col; totBal += bal;
+     tableRows += '<tr>'
+       +'<td style="padding:8px;border:1px solid #ddd">'+(l.on||l.sd)+'</td>'
+       +'<td style="padding:8px;border:1px solid #ddd;font-family:monospace;color:#0099ff">'+l.id+'</td>'
+       +'<td style="padding:8px;border:1px solid #ddd"><strong>'+l.cn+'</strong></td>'
+       +'<td style="padding:8px;border:1px solid #ddd;text-align:right">₹'+l.amt.toLocaleString('en-IN')+'</td>'
+       +'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:green;font-weight:bold">₹'+col.toLocaleString('en-IN')+'</td>'
+       +'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:red;font-weight:bold">₹'+bal.toLocaleString('en-IN')+'</td>'
+     +'</tr>';
+  });
+
+  tableRows += '<tr style="font-weight:900;background:#f5f5f5;font-size:16px">'
+    +'<td colspan="3" style="padding:12px;border:1px solid #ddd;text-align:right">TOTALS</td>'
+    +'<td style="padding:12px;border:1px solid #ddd;text-align:right">₹'+totAmt.toLocaleString('en-IN')+'</td>'
+    +'<td style="padding:12px;border:1px solid #ddd;text-align:right;color:green">₹'+totPaid.toLocaleString('en-IN')+'</td>'
+    +'<td style="padding:12px;border:1px solid #ddd;text-align:right;color:red">₹'+totBal.toLocaleString('en-IN')+'</td>'
+  +'</tr>';
+
+  let printWindow = window.open('', '_blank');
+  let htmlDoc = '<html><head><title>Audit Report - Sevvel Finance</title>'
+    +'<style>body{font-family:Arial,sans-serif;padding:30px;color:#333} h2{color:#00d4aa;margin-bottom:5px} table{width:100%;border-collapse:collapse;margin-top:25px;font-size:14px} th{background:#111520;color:#fff;padding:12px;text-align:left;border:1px solid #444} td{border:1px solid #ddd}</style>'
+    +'</head><body>'
+    +'<h2>Sevvel Finance - Detailed Audit Report</h2>'
+    +'<p style="margin:0"><strong>Period:</strong> '+periodTitle+'</p>'
+    +'<p style="margin:5px 0 0 0"><strong>Generated On:</strong> '+new Date().toLocaleString()+'</p>'
+    +'<table><thead><tr><th>Date Disbursed</th><th>Loan ID</th><th>Customer Name</th><th style="text-align:right">Loan Amount</th><th style="text-align:right">Paid Up To Now</th><th style="text-align:right">Pending Balance</th></tr></thead>'
+    +'<tbody>'+tableRows+'</tbody></table>'
+    +'<script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); };<\/script>'
+    +'</body></html>';
+    
+  printWindow.document.write(htmlDoc);
+  printWindow.document.close();
+}
+
+function pgRep(){
+  var items=[
+    {t:'Daily Collections',i:'D',d:'Collections today',id:'daily'},
+    {t:'Weekly Report',i:'W',d:'Last 7 days',id:'weekly'},
+    {t:'Monthly Report',i:'M',d:'Current month',id:'monthly'},
+    {t:'Customer Loans',i:'C',d:'All loans per customer',id:'customer'},
+    {t:'Profit Report',i:'P',d:'Interest, DC & penalty',id:'profit'},
+    {t:'Overdue Report',i:'O',d:'All overdue loans',id:'overdue'},
+    {t:'Top-Up Loans',i:'T',d:'All top-up records',id:'topup'},
+    {t:'Penalty Report',i:'Pen',d:'All penalty collections',id:'penalty'},
+    {t:'DC Report',i:'DC',d:'DC charges by loan',id:'dc'},
+    {t:'Loan Schedule',i:'Sch',d:'Repayment schedules',id:'schedule'},
+    {t:'User Activity',i:'UA',d:'Activity log (Admin)',id:'useractivity'},
+  ];
+  var html='<div class="shead"><div class="sti">Reports</div></div>'
+  +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">';
+  items.forEach(function(r){
+    html+='<div class="tc"><div style="padding:16px">'
+    +'<div style="font-weight:700;margin-bottom:4px">'+r.t+'</div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-bottom:12px">'+r.d+'</div>'
+    +'<div style="display:flex;gap:7px">'
+    +'<button class="btn btn-p btn-sm" data-rid="'+r.id+'" data-act="view" onclick="genRep(this.dataset.rid,this.dataset.act)">View</button>'
+    +'<button class="btn btn-s btn-sm" data-rid="'+r.id+'" data-act="csv" onclick="genRep(this.dataset.rid,this.dataset.act)">CSV</button>'
+    +'</div></div></div>';
+  });
+  html+='</div>';
+  document.getElementById('pg').innerHTML=html;
+}
+
 function genRep(type,action){
   if(type==='useractivity'&&!isAdmin()){toast('Admin only','error');return;}
   let rows=[],title='',headers=[];
@@ -2904,26 +2516,6 @@ function genRep(type,action){
     document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Close</button><button class="btn btn-p" data-rt="'+type+'" data-act="csv" onclick="genRep(this.dataset.rt,this.dataset.act)">Export CSV</button>';
     oM();
   }
-}
-
-function pgSet(){
-  let html=''
-  +(isAdmin()?'<div class="ss"><div class="ss-ttl">Company Settings</div><div class="fg" style="max-width:400px;margin-bottom:12px"><label>COMPANY NAME</label><input id="sCo" value="'+(db.cfg.company||'Sevvel Finance')+'"></div><button class="btn btn-p" onclick="saveCfg()">Save</button></div>':'')
-  +'<div class="ss"><div class="ss-ttl">My Account — '+CU.name+'</div>'
-  +'<div style="display:flex;align-items:center;gap:11px;margin-bottom:18px;padding:12px 14px;background:var(--bg2);border-radius:9px">'
-  +'<div class="ava" style="background:'+CU.col+';width:48px;height:48px;font-size:20px">'+CU.name[0]+'</div>'
-  +'<div><div style="font-weight:700;font-size:14px">'+CU.name+'</div><div style="font-size:12px;color:var(--muted)">@'+CU.un+' · <span class="badge '+rlb(CU.role)+'">'+rll(CU.role)+'</span></div><div style="font-size:11px;color:var(--dim);margin-top:3px">Last login: '+(CU.ll||'—')+'</div></div></div>'
-  +'<div class="fgrid" style="max-width:480px">'
-  +'<div class="fg"><label>CURRENT PASSWORD *</label><input id="cp" type="password" placeholder="Current password"></div>'
-  +'<div class="fg"><label>NEW PASSWORD *</label><input id="np" type="password" placeholder="Min 6 characters"></div>'
-  +'<div class="fg"><label>CONFIRM NEW PASSWORD</label><input id="np2" type="password" placeholder="Repeat"></div>'
-  +'</div><button class="btn btn-p" style="margin-top:12px" onclick="changePw()">Change Password</button></div>'
-  +'<div class="ss"><div class="ss-ttl">About</div>'
-  +'<div class="ss-row"><span>App Version</span><strong>Sevvel Finance v2.1</strong></div>'
-  +'<div class="ss-row"><span>Your Role</span><strong>'+rll(CU.role)+'</strong></div>'
-  +'<div class="ss-row"><span>Loan Types</span><strong>Daily · Weekly · Monthly · Short Term · EMI</strong></div>'
-  +'</div>';
-  document.getElementById('pg').innerHTML=html;
 }
 
 </script>
