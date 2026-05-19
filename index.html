@@ -348,20 +348,30 @@ select option{background:var(--card);}
 
 /* ── MODAL ── */
 /* Update this in your CSS section */
+/* --- FIXED MODAL WRAPPER --- */
 .mwrap {
   position: fixed !important;
   inset: 0 !important;
   z-index: 999999 !important;
-  background: rgba(0,0,0,0.8);
+  background: rgba(0, 0, 0, 0.95) !important; /* Solid dark background */
+  backdrop-filter: blur(6px);
   display: none;
-  align-items: flex-start; /* Changed from center to flex-start */
+  align-items: center;
   justify-content: center;
-  overflow-y: auto; /* Allows the modal to scroll */
-  padding-top: 50px; /* Gives space for the notch/header */
+  overflow-y: auto !important; /* Allows scrolling on mobile */
+  padding: 10px;
+  pointer-events: auto;
 }
 
 .mwrap.on {
   display: flex !important;
+}
+
+@media(max-width: 480px) {
+  .mwrap {
+    align-items: flex-start; /* Aligns to top on mobile */
+    padding-top: calc(env(safe-area-inset-top) + 20px);
+  }
 }
 @keyframes popIn{from{transform:scale(.94);opacity:0;}to{transform:none;opacity:1;}}
 .mhd{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--bdr);}
@@ -497,16 +507,21 @@ table { min-width: 100%; }
 
 /* Modal full-screen on small phones */
 @media(max-width: 480px){
-  .mwrap { 
-      padding-top: env(safe-area-inset-top); 
-      align-items: flex-start; /* Keeps modal from being pushed under notch */
-  }
-  .modal { 
-    max-height: 80dvh; 
-    margin: 10px 8px;
-    margin-top: calc(env(safe-area-inset-top) + 20px);
-    border-radius: 16px;
-  }
+  /* Update this block (around line 470) */
+.modal {
+  background: var(--card); /* Existing */
+  background-color: #161b27; /* ADD THIS: A solid dark color */
+  border: 1px solid var(--bdr2);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 560px;
+  /* Ensure it has a solid layer */
+  z-index: 1000000;
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+  max-height: 90vh;
+}
   .mbd { padding: 16px; }
   .mft { padding: 12px 16px; }
   .fgrid { grid-template-columns: 1fr !important; }
