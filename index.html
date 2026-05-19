@@ -1304,18 +1304,38 @@ async function savePart(eid) {
   var col  = document.getElementById('pC').value;
   if (!name||!inv||!sh) { toast('Fill all fields','error'); return; }
 
+  showLoader(true);
+  
   if (eid) {
-    await sbUpdate('partners', eid, { name, inv, sh, col });
-    var p = db.partners.find(x => x.id === eid);
-    if (p) { p.name=name; p.inv=inv; p.sh=sh; p.col=col; }
-    addLog('partner','Updated partner '+name,'ID: '+eid);
+    // UPDATING existing partner
+    var ok = await sbUpdate('partners', eid, { name, inv, sh, col });
+    if (ok) {
+        var p = db.partners.find(function(x){ return x.id === eid; });
+        if (p) { p.name=name; p.inv=inv; p.sh=sh; p.col=col; }
+        addLog('partner','Updated partner '+name,'ID: '+eid);
+        toast('Partner updated','success');
+    }
   } else {
-    var pid = 'P' + (db.nP++);
-    await sbInsert('partners', { id:pid, name, inv, sh, col });
-    db.partners.push({ id:pid, name, inv, sh, col, on:td() });
-    addLog('partner','Added partner '+name,'ID: '+pid);
+    // ADDING NEW PARTNER
+    // This is the fix: We find the highest existing number in the P-series IDs
+    var maxId = 0;
+    db.partners.forEach(function(p){
+        var num = parseInt(p.id.replace('P', ''), 10);
+        if(!isNaN(num) && num > maxId) maxId = num;
+    });
+    var newId = 'P' + (maxId + 1).toString().padStart(3, '0');
+    
+    var ok = await sbInsert('partners', { id:newId, name, inv, sh, col });
+    if (ok) {
+        db.partners.push({ id:newId, name, inv, sh, col, on:td() });
+        addLog('partner','Added partner '+name,'ID: '+newId);
+        toast('Partner added','success');
+    }
   }
-  cM(); pgPart(); toast(eid?'Updated':'Partner added','success');
+  
+  showLoader(false);
+  cM(); 
+  pgPart();
 }
 
 async function delPart(id) {
