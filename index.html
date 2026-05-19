@@ -2193,12 +2193,16 @@ function viewLoan(id){
     });
     html+='</tbody></table></div></div>';
   }
-  document.getElementById('mttl').textContent='Loan '+l.id;
-  document.getElementById('mbd').innerHTML=html;
-  document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Close</button>'
-  +(l.st!=='closed'?'<button class="btn btn-p" data-lid="'+l.id+'" onclick="cM();payModal(this.dataset.lid)">Record Payment</button>':'')
-  +(l.st!=='closed'&&bal<=0?'<button class="btn btn-s" data-lid="'+l.id+'" onclick="markClosed(this.dataset.lid)">Mark Closed</button>':'');
-  oM();
+ document.getElementById('mttl').textContent = 'Loan ' + l.id;
+  document.getElementById('mbd').innerHTML = html;
+
+  // Ensure this footer logic matches what you just wrote
+  document.getElementById('mft').innerHTML = '<button class="btn btn-s" onclick="cM()">Close</button>'
+    + '<button class="btn btn-s" onclick="updateLoanTerms(\''+l.id+'\')">Edit Terms</button>'
+    + (l.st !== 'closed' ? '<button class="btn btn-p" data-lid="'+l.id+'" onclick="cM();payModal(this.dataset.lid)">Record Payment</button>' : '')
+    + (l.st !== 'closed' && bal <= 0 ? '<button class="btn btn-s" data-lid="'+l.id+'" onclick="markClosed(this.dataset.lid)">Mark Closed</button>' : '');
+  
+  oM(); // <--- THIS IS CRITICAL: This opens the modal window
 }
 
 async function markClosed(id) {
@@ -3011,7 +3015,29 @@ function pgSet(){
   +'</div>';
   document.getElementById('pg').innerHTML=html;
 }
+// ── EXTEND LOAN TERMS ──
+async function updateLoanTerms(lid) {
+  var newDur = prompt("Enter the new total duration (months/days):");
+  var newInt = prompt("Enter the new total interest amount (₹):");
+  
+  if (newDur === null || newInt === null) return;
+  if (isNaN(newDur) || isNaN(newInt)) { toast('Please enter valid numbers', 'error'); return; }
 
+  showLoader(true);
+  var l = db.loans.find(x => x.id === lid);
+  if (l) {
+    var ok = await sbUpdate('loans', lid, { dur: Number(newDur), interest: Number(newInt) });
+    if (ok) {
+      l.dur = Number(newDur);
+      l.int = Number(newInt);
+      addLog('loan', 'Updated terms for #' + lid, 'New Duration: ' + newDur + ', New Interest: ' + newInt);
+      toast('Loan terms updated', 'success');
+      cM(); 
+      pgLoans();
+    }
+  }
+  showLoader(false);
+}
 </script>
 </body>
 </html>
