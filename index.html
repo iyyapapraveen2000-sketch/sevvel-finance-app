@@ -475,9 +475,14 @@ table { min-width: 100%; }
 
 /* Modal full-screen on small phones */
 @media(max-width: 480px){
+  .mwrap { 
+      padding-top: env(safe-area-inset-top); 
+      align-items: flex-start; /* Keeps modal from being pushed under notch */
+  }
   .modal { 
-    max-height: 85dvh; 
+    max-height: 80dvh; 
     margin: 10px 8px;
+    margin-top: calc(env(safe-area-inset-top) + 20px);
     border-radius: 16px;
   }
   .mbd { padding: 16px; }
@@ -1539,9 +1544,12 @@ async function clearLogs() {
   cConfirm('Delete logs older than 30 days?', async function() {
     var cut = aD(td(),-30);
     var before = db.logs.length;
-    await SB.from('logs').delete().lt('created_at', new Date(cut).toISOString());
-    db.logs = db.logs.filter(function(l){ return l.ts && l.ts.slice(0,10) >= cut; });
-    toast('Cleared '+(before-db.logs.length)+' old logs','info');
+    // Fix: Clear from Supabase first, then update local cache
+    var { error } = await SB.from('logs').delete().lt('ts', cut);
+    if (error) { toast('Clear error: '+error.message, 'error'); return; }
+    
+    db.logs = db.logs.filter(function(l){ return l.ts >= cut; });
+    toast('Cleared '+(before-db.logs.length)+' old logs','success');
     pgLogs();
   });
 }
