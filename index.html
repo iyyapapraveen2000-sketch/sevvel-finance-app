@@ -2748,30 +2748,41 @@ function downloadAuditPDF(mode) {
   let lFilt = [];
   let periodTitle = '';
 
-  // FILTER LOGIC
+  // 1. Filter Loans based on the active mode
   if(mode === 'monthly') {
-     // Show loans that started in this month OR have collections in this month
-     let loanIdsWithActivity = db.collections
-        .filter(c => c.date.startsWith(mSel))
-        .map(c => c.lid);
-        
+     let loanIdsWithActivity = db.collections.filter(c => c.date.startsWith(mSel)).map(c => c.lid);
      lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(mSel) || loanIdsWithActivity.includes(l.id));
      periodTitle = 'Monthly Audit - ' + mSel;
-  } 
-  // ... keep yearly and custom filters as they were ...
+  } else if(mode === 'yearly') {
+     let loanIdsWithActivity = db.collections.filter(c => c.date.startsWith(ySel)).map(c => c.lid);
+     lFilt = db.loans.filter(l => (l.on||l.sd||'').startsWith(ySel) || loanIdsWithActivity.includes(l.id));
+     periodTitle = 'Yearly Audit - ' + ySel;
+  } else if(mode === 'custom') {
+     let loanIdsWithActivity = db.collections.filter(c => c.date >= d1 && c.date <= d2).map(c => c.lid);
+     lFilt = db.loans.filter(l => {let d=(l.on||l.sd||'').slice(0,10); return (d>=d1 && d<=d2) || loanIdsWithActivity.includes(l.id);});
+     periodTitle = 'Custom Audit (' + d1 + ' to ' + d2 + ')';
+  }
 
   let tableRows = '';
   let tPrin=0, tColl=0;
 
   lFilt.forEach(l => {
-     // 1. Filter collections to ONLY show those for the selected month
-     let loanCols = db.collections.filter(c => 
-        c.lid === l.id && (mode === 'monthly' ? c.date.startsWith(mSel) : true)
-     );
+     // 2. Filter collections dynamically based on the active mode
+     let loanCols = db.collections.filter(c => {
+        if (c.lid !== l.id) return false;
+        if (mode === 'monthly') return c.date.startsWith(mSel);
+        if (mode === 'yearly') return c.date.startsWith(ySel);
+        if (mode === 'custom') return c.date >= d1 && c.date <= d2;
+        return true;
+     });
 
-     // Only show the loan row if there is at least one collection in that month 
-     // OR if the loan started in that month
-     if (loanCols.length > 0 || (l.on||l.sd||'').startsWith(mSel)) {
+     // Check if the loan started in the range OR has activity in the range
+     let isLoanInPeriod = (mode === 'monthly' ? (l.on||l.sd||'').startsWith(mSel) : 
+                          (mode === 'yearly' ? (l.on||l.sd||'').startsWith(ySel) : 
+                          ((l.on||l.sd||'').slice(0,10) >= d1 && (l.on||l.sd||'').slice(0,10) <= d2)));
+
+     if (loanCols.length > 0 || isLoanInPeriod) {
+         tPrin += l.amt;
          tableRows += '<tr style="background:#f8f9fa; font-weight:bold">'
             +'<td style="padding:8px;border:1px solid #ddd">'+(l.on||l.sd)+'</td>'
             +'<td style="padding:8px;border:1px solid #ddd">'+l.id+'</td>'
@@ -2794,6 +2805,7 @@ function downloadAuditPDF(mode) {
          });
      }
   });
+
   tableRows += '<tr style="font-weight:900;background:#eee;font-size:14px">'
     +'<td colspan="3" style="padding:12px;border:1px solid #ddd;text-align:right">TOTALS</td>'
     +'<td style="padding:12px;border:1px solid #ddd;text-align:right">₹'+tPrin.toLocaleString('en-IN')+'</td>'
@@ -2810,7 +2822,6 @@ function downloadAuditPDF(mode) {
     +'<tbody>'+tableRows+'</tbody></table>'
     +'<script>window.onload = function() { window.print(); };<\/script>'
     +'</body></html>';
-    
   printWindow.document.write(htmlDoc);
   printWindow.document.close();
 }
