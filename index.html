@@ -854,13 +854,19 @@ async function loadAll() {
 var realtimeChannel = null;
 var _reloadTimer = null;
 function setupRealtime() {
-  if(realtimeChannel) return;
-  realtimeChannel = SB.channel('sevvel-realtime')
-    .on('postgres_changes',{event:'*',schema:'public',table:'customers'},  handleRT)
-    .on('postgres_changes',{event:'*',schema:'public',table:'loans'},       handleRT)
-    .on('postgres_changes',{event:'*',schema:'public',table:'collections'}, handleRT)
-    .on('postgres_changes',{event:'*',schema:'public',table:'partners'},    handleRT)
-    .subscribe();
+  try {
+    if(realtimeChannel) return;
+    realtimeChannel = SB.channel('sevvel-realtime')
+      .on('postgres_changes',{event:'*',schema:'public',table:'customers'},  handleRT)
+      .on('postgres_changes',{event:'*',schema:'public',table:'loans'},       handleRT)
+      .on('postgres_changes',{event:'*',schema:'public',table:'collections'}, handleRT)
+      .on('postgres_changes',{event:'*',schema:'public',table:'partners'},    handleRT)
+      .subscribe((status) => {
+          if (status === 'SUBSCRIBED') console.log("Realtime connected");
+      });
+  } catch(e) {
+    console.warn("Realtime connection failed (but app will still work):", e);
+  }
 }
 async function handleRT(payload) {
   clearTimeout(_reloadTimer);
