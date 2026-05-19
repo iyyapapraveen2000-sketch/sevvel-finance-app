@@ -944,8 +944,12 @@ async function doLogin(){
 
   addLog('login','logged in','Role: '+rll(usr.role));
   refreshSB();
-  var lp=document.getElementById('loginPg'); if(lp) lp.style.display='none';
+  
+  // Force UI to switch
+  document.getElementById('loginPg').style.display = 'none';
+  document.getElementById('shell').style.display = 'flex';
   document.getElementById('shell').classList.add('on');
+  
   go('dashboard');
   try{ setupRealtime(); }catch(e){}
 }
@@ -969,9 +973,12 @@ function go(page){
   setAct(page);
   document.getElementById('tbtl').textContent=pgNames[page]||page;
   closeSB(); document.getElementById('gsi').value='';
-  ({dashboard:pgDash,customers:pgCust,loans:pgLoans,collections:pgColl,
-    partners:pgPart,profit:pgProfit,audit:pgAudit,reports:pgRep,users:pgUsers,
-    actlogs:pgLogs,backup:pgBackup,settings:pgSet}[page]||pgDash)();
+  var routes = {
+    dashboard: pgDash, customers: pgCust, loans: pgLoans, collections: pgColl,
+    partners: pgPart, profit: pgProfit, audit: pgAudit, reports: pgRep, 
+    users: pgUsers, actlogs: pgLogs, backup: pgBackup, settings: pgSet
+  };
+  (routes[page] || pgDash)();
 }
 function setAct(p){
   document.querySelectorAll('.ni').forEach(function(n){n.classList.toggle('on',n.dataset.p===p);});
