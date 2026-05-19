@@ -167,9 +167,16 @@ html,body{height:100%;overflow:hidden;font-family:var(--ff);background:var(--bg)
 /* ── MAIN ── */
 .main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;}
 .topbar{
-  height:var(--top-h);display:flex;align-items:center;gap:12px;
-  padding:0 20px;border-bottom:1px solid var(--bdr);background:var(--card);
-  flex-shrink:0;
+  height: calc(var(--top-h) + env(safe-area-inset-top)); 
+  padding-top: env(safe-area-inset-top);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 20px;
+  padding-right: 20px;
+  border-bottom: 1px solid var(--bdr);
+  background: var(--card);
+  flex-shrink: 0;
 }
 .hmbg{
   display:none;width:36px;height:36px;border-radius:8px;border:1px solid var(--bdr2);
@@ -499,7 +506,7 @@ table { min-width: 100%; }
 
 /* Topbar on mobile */
 @media(max-width: 380px){
-  .topbar { padding: 0 12px; gap: 8px; }
+  .topbar { padding-left: 12px; padding-right: 12px; gap: 8px; }
   .tb-ttl { font-size: 14px; }
   .sess span { display: none; }
 }
