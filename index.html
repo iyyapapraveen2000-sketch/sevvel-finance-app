@@ -900,42 +900,54 @@ function cConfirm(msg,onYes){
 
 // ── AUTH ──────────────────────────────────────────────────────
 async function doLogin(){
-  var u = document.getElementById('lu').value.trim().toLowerCase();
-  var p = document.getElementById('lp').value;
-  var errEl = document.getElementById('lerr');
-  
-  if(!u || !p) { errEl.textContent = 'Enter username and password'; errEl.style.display = 'block'; return; }
+  var u=document.getElementById('lu').value.trim().toLowerCase();
+  var p=document.getElementById('lp').value;
+  var errEl=document.getElementById('lerr');
+  if(!u||!p){errEl.style.display='block';errEl.textContent='Enter username and password';return;}
+
+  var FALLBACK_USERS=[
+    {id:'U100',name:'Admin User',  un:'admin',  pw:'admin123',  role:'admin',  st:'active',col:'#ff4757',ll:null},
+    {id:'U101',name:'Selvam Kumar',un:'selvam', pw:'selvam123', role:'partner',st:'active',col:'#0099ff',ll:null},
+    {id:'U102',name:'Karthik R',   un:'karthik',pw:'karthik123',role:'partner',st:'active',col:'#f5c842',ll:null},
+    {id:'U103',name:'Priya Staff', un:'priya',  pw:'priya123',  role:'staff',  st:'active',col:'#00d4aa',ll:null},
+    {id:'U104',name:'Anand Kumar', un:'anand',  pw:'anand123',  role:'staff',  st:'active',col:'#c864ff',ll:null},
+  ];
+
+  // Check hardcoded first
+  var usr=FALLBACK_USERS.find(function(x){return x.un.toLowerCase()===u&&x.pw===p&&x.st==='active';});
+
+  // Try Supabase for non-hardcoded users
+  if(!usr){
+    showLoader(true);
+    try{
+      var r=await SB.from('users').select('*');
+      if(!r.error && r.data) {
+        db.users=r.data;
+        usr=db.users.find(function(x){return x.un&&x.un.toLowerCase()===u&&x.pw===p&&x.st==='active';});
+      }
+    }catch(e){console.warn('Supabase login failed:',e);}
+    showLoader(false);
+  } else {
+    if(!db.users.find(function(x){return x.id===usr.id;})) db.users.push(usr);
+  }
+
+  if(!usr){errEl.style.display='block';errEl.textContent='Invalid username or password.';return;}
+  errEl.style.display='none';
+  CU=usr;
+  var loginTime=nw(); usr.ll=loginTime;
+  // Silently update last login — don't block or show errors
+  SB.from('users').update({ll:loginTime}).eq('id',usr.id).then(function(){}).catch(function(){});
 
   showLoader(true);
-  try {
-    // 1. Fetch from Supabase
-    const { data, error } = await SB.from('users').select('*');
-    if (error) throw error;
-    
-    // 2. Find user
-    const usr = data.find(x => x.un && x.un.toLowerCase() === u && x.pw === p && x.st === 'active');
-    
-    if (usr) {
-      CU = usr;
-      await loadAll();
-      refreshSB();
-      
-      // 3. Force the UI switch
-      document.getElementById('loginPg').style.display = 'none';
-      document.getElementById('shell').style.display = 'flex';
-      document.getElementById('shell').classList.add('on');
-      
-      go('dashboard');
-      showLoader(false);
-      return;
-    }
-  } catch(e) {
-    console.error('Login Error:', e);
-  }
-  
+  try{ await loadAll(); }catch(e){ console.warn('loadAll failed:',e); }
   showLoader(false);
-  errEl.textContent = 'Invalid credentials or DB connection issue.';
-  errEl.style.display = 'block';
+
+  addLog('login','logged in','Role: '+rll(usr.role));
+  refreshSB();
+  var lp=document.getElementById('loginPg'); if(lp) lp.style.display='none';
+  document.getElementById('shell').classList.add('on');
+  go('dashboard');
+  try{ setupRealtime(); }catch(e){}
 }
 
 function logout(){
@@ -949,6 +961,7 @@ function logout(){
   db.customers=[];db.loans=[];db.collections=[];db.partners=[];db.logs=[];
 }
 
+// ── NAV ──────────────────────────────────────────────────────
 function go(page){
   if(!CU) return;
   if(['users','actlogs'].includes(page)&&!isAdmin()){closeSB();permDenied();setAct(page);return;}
@@ -956,15 +969,9 @@ function go(page){
   setAct(page);
   document.getElementById('tbtl').textContent=pgNames[page]||page;
   closeSB(); document.getElementById('gsi').value='';
-  
-  var routes = {
-    dashboard: pgDash, customers: pgCust, loans: pgLoans, collections: pgColl,
-    partners: pgPart, profit: pgProfit, audit: pgAudit, reports: pgRep, 
-    users: pgUsers, actlogs: pgLogs, backup: pgBackup, settings: pgSet
-  };
-  
-  if(routes[page]) routes[page]();
-  else pgDash();
+  ({dashboard:pgDash,customers:pgCust,loans:pgLoans,collections:pgColl,
+    partners:pgPart,profit:pgProfit,audit:pgAudit,reports:pgRep,users:pgUsers,
+    actlogs:pgLogs,backup:pgBackup,settings:pgSet}[page]||pgDash)();
 }
 function setAct(p){
   document.querySelectorAll('.ni').forEach(function(n){n.classList.toggle('on',n.dataset.p===p);});
@@ -2713,6 +2720,25 @@ function genRep(type,action){
   }
 }
 
+function pgSet(){
+  let html=''
+  +(isAdmin()?'<div class="ss"><div class="ss-ttl">Company Settings</div><div class="fg" style="max-width:400px;margin-bottom:12px"><label>COMPANY NAME</label><input id="sCo" value="'+(db.cfg.company||'Sevvel Finance')+'"></div><button class="btn btn-p" onclick="saveCfg()">Save</button></div>':'')
+  +'<div class="ss"><div class="ss-ttl">My Account — '+CU.name+'</div>'
+  +'<div style="display:flex;align-items:center;gap:11px;margin-bottom:18px;padding:12px 14px;background:var(--bg2);border-radius:9px">'
+  +'<div class="ava" style="background:'+CU.col+';width:48px;height:48px;font-size:20px">'+CU.name[0]+'</div>'
+  +'<div><div style="font-weight:700;font-size:14px">'+CU.name+'</div><div style="font-size:12px;color:var(--muted)">@'+CU.un+' · <span class="badge '+rlb(CU.role)+'">'+rll(CU.role)+'</span></div><div style="font-size:11px;color:var(--dim);margin-top:3px">Last login: '+(CU.ll||'—')+'</div></div></div>'
+  +'<div class="fgrid" style="max-width:480px">'
+  +'<div class="fg"><label>CURRENT PASSWORD *</label><input id="cp" type="password" placeholder="Current password"></div>'
+  +'<div class="fg"><label>NEW PASSWORD *</label><input id="np" type="password" placeholder="Min 6 characters"></div>'
+  +'<div class="fg"><label>CONFIRM NEW PASSWORD</label><input id="np2" type="password" placeholder="Repeat"></div>'
+  +'</div><button class="btn btn-p" style="margin-top:12px" onclick="changePw()">Change Password</button></div>'
+  +'<div class="ss"><div class="ss-ttl">About</div>'
+  +'<div class="ss-row"><span>App Version</span><strong>Sevvel Finance v2.1</strong></div>'
+  +'<div class="ss-row"><span>Your Role</span><strong>'+rll(CU.role)+'</strong></div>'
+  +'<div class="ss-row"><span>Loan Types</span><strong>Daily · Weekly · Monthly · Short Term · EMI</strong></div>'
+  +'</div>';
+  document.getElementById('pg').innerHTML=html;
+}
 
 function pgUsers(rf){
   rf=rf||'';
@@ -2910,8 +2936,9 @@ function genRep(type,action){
     oM();
   }
 }
+
 function pgSet(){
-  let html = '<div class="shead"><div class="sti">Settings</div></div>'
+  let html=''
   +(isAdmin()?'<div class="ss"><div class="ss-ttl">Company Settings</div><div class="fg" style="max-width:400px;margin-bottom:12px"><label>COMPANY NAME</label><input id="sCo" value="'+(db.cfg.company||'Sevvel Finance')+'"></div><button class="btn btn-p" onclick="saveCfg()">Save</button></div>':'')
   +'<div class="ss"><div class="ss-ttl">My Account — '+CU.name+'</div>'
   +'<div style="display:flex;align-items:center;gap:11px;margin-bottom:18px;padding:12px 14px;background:var(--bg2);border-radius:9px">'
@@ -2923,10 +2950,11 @@ function pgSet(){
   +'<div class="fg"><label>CONFIRM NEW PASSWORD</label><input id="np2" type="password" placeholder="Repeat"></div>'
   +'</div><button class="btn btn-p" style="margin-top:12px" onclick="changePw()">Change Password</button></div>'
   +'<div class="ss"><div class="ss-ttl">About</div>'
-  +'<div class="ss-row"><span>App Version</span><strong>Sevvel Finance v3.0</strong></div>'
+  +'<div class="ss-row"><span>App Version</span><strong>Sevvel Finance v2.1</strong></div>'
   +'<div class="ss-row"><span>Your Role</span><strong>'+rll(CU.role)+'</strong></div>'
+  +'<div class="ss-row"><span>Loan Types</span><strong>Daily · Weekly · Monthly · Short Term · EMI</strong></div>'
   +'</div>';
-  document.getElementById('pg').innerHTML = html;
+  document.getElementById('pg').innerHTML=html;
 }
 
 </script>
