@@ -3019,29 +3019,37 @@ async function updateLoanTerms(lid) {
   var l = db.loans.find(x => x.id === lid);
   if (!l) return;
 
-  var newDur = prompt("Enter the new total duration (months/days):", l.dur);
-  var newInt = prompt("Enter the new total interest amount (₹):", l.int);
+  var newDur = prompt("Enter the new total duration (months):", l.dur);
+  var newInt = prompt("Enter the new monthly interest amount (₹):", l.int);
   
   if (newDur === null || newInt === null) return;
   newDur = Number(newDur); newInt = Number(newInt);
   
-  if (isNaN(newDur) || isNaN(newInt)) { toast('Please enter valid numbers', 'error'); return; }
+  if (isNaN(newDur) || isNaN(newInt)) { toast('Invalid numbers', 'error'); return; }
 
-  // 1. REGENERATE THE SCHEDULE (This is the missing link!)
+  // REBUILD SCHEDULE LOGIC (For Monthly Interest Only)
   var newSch = [];
-  var sd = l.sd; 
-  // Simplified logic: adjust based on loan type
+  var lastPaidIndex = l.sch.findIndex(s => s.p === false); // Find first unpaid
+  
   for(var i = 1; i <= newDur; i++) {
-      newSch.push({
-          n: i,
-          d: (l.tp === 'monthly' ? aM(sd, i) : aD(sd, i* (l.tp === 'daily' ? 1 : 7))),
-          a: +(l.amt / newDur).toFixed(2), // Adjusts installment based on new duration
-          p: false
-      });
+      // If the installment is already paid (in the past), keep it as is
+      if (i < lastPaidIndex + 1 && l.sch[i-1]) {
+          newSch.push(l.sch[i-1]);
+      } else {
+          // Calculate for future installments
+          // Interest-only for all months except the last one
+          var isLast = (i === newDur);
+          newSch.push({
+              n: i,
+              d: aM(l.sd, i), // Uses your existing aM helper
+              a: isLast ? (l.amt + newInt) : newInt,
+              p: false
+          });
+      }
   }
 
   showLoader(true);
-  // 2. Update DB with new duration, new interest, AND the NEW schedule
+  // Update DB with new terms AND the fresh schedule
   var ok = await sbUpdate('loans', lid, { 
       dur: newDur, 
       interest: newInt, 
@@ -3051,8 +3059,8 @@ async function updateLoanTerms(lid) {
   if (ok) {
       l.dur = newDur;
       l.int = newInt;
-      l.sch = newSch; // Update local cache
-      addLog('loan', 'Updated terms for #' + lid, 'New Duration: ' + newDur + ', New Interest: ' + newInt);
+      l.sch = newSch; 
+      addLog('loan', 'Updated terms for #' + lid, 'New Dur: ' + newDur + ' months, New Int: ₹' + newInt);
       toast('Loan terms & schedule updated', 'success');
       cM(); 
       viewLoan(lid); // Refresh the view to show the new schedule
