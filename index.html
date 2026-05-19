@@ -1588,29 +1588,33 @@ function dashModal(type){
       html+='</tbody></table></div>';
     }
   } else if(type==='duetoday'){
-    const dueToday=db.loans.filter(function(l){return l.st!=='closed' && l.sch && l.sch.some(function(s){return !s.p && s.d === td();});});
+    // Find loans with ANY unpaid installment due today OR in the past
+    const dueToday=db.loans.filter(function(l){return l.st!=='closed' && l.sch && l.sch.some(function(s){return !s.p && s.d <= td();});});
+    // Sum up all arrears + today's due for the total expected
     const totalDueAmt=dueToday.reduce(function(s,l){
-        let dueSch = l.sch.find(function(sch){return !sch.p && sch.d === td();});
-        return s + (dueSch ? Number(dueSch.a) : 0);
+        let pendingSch = l.sch.filter(function(sch){return !sch.p && sch.d <= td();});
+        let loanDue = pendingSch.reduce(function(sum, sch){ return sum + Number(sch.a); }, 0);
+        return s + loanDue;
     },0);
-    title='📅 Due Today — '+td();
+    title='📅 Due & Overdue — '+td();
     if(!dueToday.length){html='<div class="empty" style="padding:30px"><div class="empty-ic">🎉</div><p>No loans due today!</p></div>';}
     else{
       html='<div style="display:flex;gap:10px;margin-bottom:14px">'
-      +'<div style="flex:1;background:var(--bg2);border-radius:9px;padding:10px;text-align:center"><div style="font-size:11px;color:var(--muted)">Loans Due</div><div style="font-size:18px;font-weight:700;color:var(--gold)">'+dueToday.length+'</div></div>'
-      +'<div style="flex:1;background:var(--bg2);border-radius:9px;padding:10px;text-align:center"><div style="font-size:11px;color:var(--muted)">Expected Today</div><div class="am" style="font-size:18px;color:var(--teal)">'+R(totalDueAmt)+'</div></div>'
+      +'<div style="flex:1;background:var(--bg2);border-radius:9px;padding:10px;text-align:center"><div style="font-size:11px;color:var(--muted)">Loans Pending</div><div style="font-size:18px;font-weight:700;color:var(--gold)">'+dueToday.length+'</div></div>'
+      +'<div style="flex:1;background:var(--bg2);border-radius:9px;padding:10px;text-align:center"><div style="font-size:11px;color:var(--muted)">Total Due Now</div><div class="am" style="font-size:18px;color:var(--teal)">'+R(totalDueAmt)+'</div></div>'
       +'</div>'
-      +'<div class="ts" style="max-height:360px"><table><thead><tr><th>Loan</th><th>Customer</th><th>Type</th><th>Due Amt</th><th>Balance</th><th>Pay</th></tr></thead><tbody>';
+      +'<div class="ts" style="max-height:360px"><table><thead><tr><th>Loan</th><th>Customer</th><th>Type</th><th>Current Due</th><th>Remaining Bal</th><th>Pay</th></tr></thead><tbody>';
       dueToday.forEach(function(l){
         const col=db.collections.filter(function(c){return c.lid===l.id;}).reduce(function(s,c){return s+Number(c.amt);},0);
         const bal=Math.max(0,l.amt-col);
-        const dueSch = l.sch.find(function(sch){return !sch.p && sch.d === td();});
-        const dAmt = dueSch ? Number(dueSch.a) : 0;
+        // Sum up all unpaid arrears for THIS specific loan
+        const pendingSch = l.sch.filter(function(sch){return !sch.p && sch.d <= td();});
+        const dAmt = pendingSch.reduce(function(sum, sch){ return sum + Number(sch.a); }, 0);
         html+='<tr>'
         +'<td style="font-family:var(--mono);font-size:11px;color:var(--blue)">'+l.id+'</td>'
         +'<td><strong>'+l.cn+'</strong></td>'
         +'<td><span class="badge '+ltb(l.tp)+'" style="font-size:10px">'+ltl(l.tp)+'</span></td>'
-        +'<td class="am" style="color:var(--teal);font-weight:bold">'+R(dAmt)+'</td>'
+        +'<td class="am" style="color:var(--orange);font-weight:bold">'+R(dAmt)+'</td>'
         +'<td class="am" style="color:'+(bal>0?'var(--red)':'var(--green)')+'">'+R(bal)+'</td>'
         +'<td><button class="btn btn-sm btn-p" onclick="cM();payModal(\''+l.id+'\')">Pay</button></td>'
         +'</tr>';
