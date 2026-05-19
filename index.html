@@ -2794,7 +2794,26 @@ function downloadAuditPDF(mode) {
          });
      }
   });
-  // ... rest of the function remains the same ...
+  tableRows += '<tr style="font-weight:900;background:#eee;font-size:14px">'
+    +'<td colspan="3" style="padding:12px;border:1px solid #ddd;text-align:right">TOTALS</td>'
+    +'<td style="padding:12px;border:1px solid #ddd;text-align:right">₹'+tPrin.toLocaleString('en-IN')+'</td>'
+    +'<td colspan="2" style="padding:12px;border:1px solid #ddd;text-align:right;color:green">Total Collected: ₹'+tColl.toLocaleString('en-IN')+'</td>'
+  +'</tr>';
+
+  let printWindow = window.open('', '_blank');
+  let htmlDoc = '<html><head><title>Audit Statement</title>'
+    +'<style>body{font-family:Helvetica,sans-serif;padding:20px} h2{color:#00d4aa} table{width:100%;border-collapse:collapse} th{background:#333;color:#fff;padding:10px;border:1px solid #ddd} td{padding:8px;border:1px solid #ddd}</style>'
+    +'</head><body>'
+    +'<h2>Sevvel Finance Statement</h2>'
+    +'<p>'+periodTitle+'</p>'
+    +'<table><thead><tr><th>Date</th><th>Loan ID</th><th>Description</th><th>Amount</th><th>Penalty</th><th>Reference</th></tr></thead>'
+    +'<tbody>'+tableRows+'</tbody></table>'
+    +'<script>window.onload = function() { window.print(); };<\/script>'
+    +'</body></html>';
+    
+  printWindow.document.write(htmlDoc);
+  printWindow.document.close();
+}
 
 function pgRep(){
   var items=[
