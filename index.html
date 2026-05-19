@@ -2708,25 +2708,6 @@ function genRep(type,action){
   }
 }
 
-function pgSet(){
-  let html=''
-  +(isAdmin()?'<div class="ss"><div class="ss-ttl">Company Settings</div><div class="fg" style="max-width:400px;margin-bottom:12px"><label>COMPANY NAME</label><input id="sCo" value="'+(db.cfg.company||'Sevvel Finance')+'"></div><button class="btn btn-p" onclick="saveCfg()">Save</button></div>':'')
-  +'<div class="ss"><div class="ss-ttl">My Account — '+CU.name+'</div>'
-  +'<div style="display:flex;align-items:center;gap:11px;margin-bottom:18px;padding:12px 14px;background:var(--bg2);border-radius:9px">'
-  +'<div class="ava" style="background:'+CU.col+';width:48px;height:48px;font-size:20px">'+CU.name[0]+'</div>'
-  +'<div><div style="font-weight:700;font-size:14px">'+CU.name+'</div><div style="font-size:12px;color:var(--muted)">@'+CU.un+' · <span class="badge '+rlb(CU.role)+'">'+rll(CU.role)+'</span></div><div style="font-size:11px;color:var(--dim);margin-top:3px">Last login: '+(CU.ll||'—')+'</div></div></div>'
-  +'<div class="fgrid" style="max-width:480px">'
-  +'<div class="fg"><label>CURRENT PASSWORD *</label><input id="cp" type="password" placeholder="Current password"></div>'
-  +'<div class="fg"><label>NEW PASSWORD *</label><input id="np" type="password" placeholder="Min 6 characters"></div>'
-  +'<div class="fg"><label>CONFIRM NEW PASSWORD</label><input id="np2" type="password" placeholder="Repeat"></div>'
-  +'</div><button class="btn btn-p" style="margin-top:12px" onclick="changePw()">Change Password</button></div>'
-  +'<div class="ss"><div class="ss-ttl">About</div>'
-  +'<div class="ss-row"><span>App Version</span><strong>Sevvel Finance v2.1</strong></div>'
-  +'<div class="ss-row"><span>Your Role</span><strong>'+rll(CU.role)+'</strong></div>'
-  +'<div class="ss-row"><span>Loan Types</span><strong>Daily · Weekly · Monthly · Short Term · EMI</strong></div>'
-  +'</div>';
-  document.getElementById('pg').innerHTML=html;
-}
 
 function pgUsers(rf){
   rf=rf||'';
@@ -2924,9 +2905,8 @@ function genRep(type,action){
     oM();
   }
 }
-
 function pgSet(){
-  let html=''
+  let html = '<div class="shead"><div class="sti">Settings</div></div>'
   +(isAdmin()?'<div class="ss"><div class="ss-ttl">Company Settings</div><div class="fg" style="max-width:400px;margin-bottom:12px"><label>COMPANY NAME</label><input id="sCo" value="'+(db.cfg.company||'Sevvel Finance')+'"></div><button class="btn btn-p" onclick="saveCfg()">Save</button></div>':'')
   +'<div class="ss"><div class="ss-ttl">My Account — '+CU.name+'</div>'
   +'<div style="display:flex;align-items:center;gap:11px;margin-bottom:18px;padding:12px 14px;background:var(--bg2);border-radius:9px">'
@@ -2938,11 +2918,10 @@ function pgSet(){
   +'<div class="fg"><label>CONFIRM NEW PASSWORD</label><input id="np2" type="password" placeholder="Repeat"></div>'
   +'</div><button class="btn btn-p" style="margin-top:12px" onclick="changePw()">Change Password</button></div>'
   +'<div class="ss"><div class="ss-ttl">About</div>'
-  +'<div class="ss-row"><span>App Version</span><strong>Sevvel Finance v2.1</strong></div>'
+  +'<div class="ss-row"><span>App Version</span><strong>Sevvel Finance v3.0</strong></div>'
   +'<div class="ss-row"><span>Your Role</span><strong>'+rll(CU.role)+'</strong></div>'
-  +'<div class="ss-row"><span>Loan Types</span><strong>Daily · Weekly · Monthly · Short Term · EMI</strong></div>'
   +'</div>';
-  document.getElementById('pg').innerHTML=html;
+  document.getElementById('pg').innerHTML = html;
 }
 
 </script>
