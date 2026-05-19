@@ -1542,29 +1542,35 @@ function pgRep() {
 // ── ACTIVITY LOGS ─────────────────────────────────────────────
 async function clearLogs() {
   cConfirm('Delete logs older than 30 days?', async function() {
-    // 1. Calculate the cutoff date (30 days ago) in YYYY-MM-DD format
-    var cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
-    var cutoffStr = cutoff.toISOString().slice(0, 10); 
+    // 1. Calculate the cutoff date (30 days ago) as a YYYY-MM-DD string
+    var cutDate = new Date();
+    cutDate.setDate(cutDate.getDate() - 30);
+    var cutoffStr = cutDate.toISOString().slice(0, 10); // Format: "2026-04-19"
     
     toast('Clearing logs...','info');
 
-    // 2. Delete from Supabase
-    // We filter by the 'ts' column which contains the date
-    var { error } = await SB.from('logs').delete().lt('ts', cutoffStr + ' 00:00');
-    
+    // 2. Query Supabase
+    // We look for logs where the 'ts' column (which is a string like "2026-05-19 17:43")
+    // is LESS THAN our cutoff date.
+    const { data, error } = await SB.from('logs')
+      .delete()
+      .lt('ts', cutoffStr); // This compares the string date directly
+      
     if (error) { 
+      console.error("Supabase delete error:", error);
       toast('Clear error: '+error.message, 'error'); 
       return; 
     }
     
-    // 3. Update local cache (only keep logs from the last 30 days)
+    // 3. Update the local view
     var before = db.logs.length;
     db.logs = db.logs.filter(function(l){ 
+        // Only keep logs where the date part is >= the cutoff
         return l.ts.slice(0, 10) >= cutoffStr; 
     });
     
-    toast('Cleared '+(before - db.logs.length)+' logs successfully', 'success');
+    var clearedCount = before - db.logs.length;
+    toast('Cleared ' + clearedCount + ' logs successfully', 'success');
     pgLogs();
   });
 }
