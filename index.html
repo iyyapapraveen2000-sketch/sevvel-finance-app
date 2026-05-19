@@ -1232,12 +1232,22 @@ async function savePay() {
   if (!ok) return;
   db.collections.push({id:colId,lid:lid,cid:l.cid,cn:l.cn,amt:amt,pen:pen,date:date,note:note,by:CU.un,on:td()});
 
-  var colTotal=db.collections.filter(function(c){return c.lid===lid;}).reduce(function(s,c){return s+Number(c.amt);},0);
+  // 1. Calculate total collected including the new payment
+  var colTotal = db.collections.filter(function(c){return c.lid===lid;}).reduce(function(s,c){return s+Number(c.amt);},0);
 
-  var schArr=Array.isArray(l.sch)?l.sch:[];
-  var rem=amt;
-  for(var i=0;i<schArr.length;i++){if(!schArr[i].p&&rem>=schArr[i].a){schArr[i].p=true;rem-=schArr[i].a;}}
-  l.sch=schArr; l.col=colTotal;
+  // 2. FULLY SYNC: Reset schedule, then mark based on total collected
+  var schArr = Array.isArray(l.sch) ? l.sch : [];
+  var runningTotal = 0;
+  
+  // Mark items as paid based on the CUMULATIVE total collected
+  schArr.forEach(function(s) {
+      runningTotal += Number(s.a);
+      // If the total amount collected so far covers this installment, mark paid
+      s.p = (colTotal >= runningTotal);
+  });
+
+  l.sch = schArr; 
+  l.col = colTotal;
 
   var totalDue=(l.tp==='short')?(l.amt+Number(l.int||0)):l.amt;
   // DB uses 'collected' and 'sch' column names
@@ -3065,6 +3075,29 @@ async function updateLoanTerms(lid) {
       viewLoan(lid); 
   }
   showLoader(false);
+}
+function syncLoanSchedule(lid) {
+  var l = db.loans.find(x => x.id === lid);
+  if (!l || !l.sch) return;
+
+  // 1. Get all collections for this loan
+  var cols = db.collections.filter(c => c.lid === lid);
+  var totalPaid = cols.reduce((s, c) => s + Number(c.amt), 0);
+
+  // 2. Reset all schedule items to pending
+  l.sch.forEach(s => s.p = false);
+
+  // 3. Mark items as paid based on collected total
+  var runningTotal = 0;
+  l.sch.forEach(s => {
+    runningTotal += Number(s.a);
+    if (totalPaid >= runningTotal) {
+      s.p = true;
+    }
+  });
+
+  // 4. Update Supabase with the corrected schedule
+  sbUpdate('loans', lid, { sch: JSON.stringify(l.sch) });
 }
 </script>
 </body>
