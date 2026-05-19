@@ -119,9 +119,10 @@ html,body{height:100%;overflow:hidden;font-family:var(--ff);background:var(--bg)
 
 /* ── SIDEBAR ── */
 .sb{
-  width:var(--sb-w);height:100vh;background:var(--card);border-right:1px solid var(--bdr);
+  width:var(--sb-w);height:100dvh;background:var(--card);border-right:1px solid var(--bdr);
   display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;
   position:relative;z-index:300;transition:transform .3s cubic-bezier(.4,0,.2,1);
+  padding-top: env(safe-area-inset-top); /* This fixes the iPhone notch issue */
 }
 @media(max-width:768px){
   .sb{position:fixed;top:0;left:0;transform:translateX(-100%);box-shadow:var(--shadow-lg);}
@@ -2643,7 +2644,7 @@ function downloadAuditPDF(mode) {
   let htmlDoc = '<html><head><title>Official Audit Report</title>'
     +'<style>body{font-family:Helvetica,sans-serif;padding:20px} h2{color:#00d4aa;text-transform:uppercase} table{width:100%;border-collapse:collapse;margin-top:20px} th{background:#f8f9fa;padding:10px;border:1px solid #dee2e6;font-size:12px;text-align:right} td{padding:8px;border:1px solid #dee2e6;font-size:12px}</style>'
     +'</head><body>'
-    +'<h2>Sevvel Finance - Detailed Audit Report</h2>'
+    +'<h2>Sevvel Finance - Official Audit Statement</h2>'
     +'<p><strong>Period:</strong> '+periodTitle+' | <strong>Date:</strong> '+new Date().toLocaleDateString()+'</p>'
     +'<table><thead><tr>'
     +'<th style="text-align:left">Date</th><th style="text-align:left">Loan ID</th><th style="text-align:left">Customer</th>'
