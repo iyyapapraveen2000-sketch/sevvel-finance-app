@@ -651,7 +651,8 @@ table { min-width: 100%; }
 // ════════════════════════════════════════════════════════════════
 // SEVVEL FINANCE LMS — Production (Supabase Edition)
 // ════════════════════════════════════════════════════════════════
-
+let currentCollPage = 1;
+const rowsPerPage = 10;
 // ── ⚙️  CONFIGURATION — PASTE YOUR SUPABASE KEYS HERE ────────
 const SUPABASE_URL  = 'https://whdrxdgizykmrapciuna.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZHJ4ZGdpenlrbXJhcGNpdW5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4Njk0NzMsImV4cCI6MjA5NDQ0NTQ3M30.j5UEhDIzP8GWuC-01-3jQTM1J2eBSydxy3hTUVChNh0';
@@ -2350,24 +2351,43 @@ function pgColl(){
   document.getElementById('pg').innerHTML=html;
 }
 
-function renderCols(cols){
-  if(!cols.length)return'<tr><td colspan="8"><div class="empty"><p>No collections</p></div></td></tr>';
-  return cols.map(function(c){
-    var rec=c.by?db.users.find(function(u){return u.un===c.by;}):null;
-    return'<tr>'
-    +'<td style="font-size:11px">'+c.date+'</td>'
-    +'<td style="font-family:var(--mono);font-size:11px;color:var(--blue)">'+c.lid+'</td>'
-    +'<td><strong>'+c.cn+'</strong></td>'
-    +'<td class="am amp">'+R(c.amt)+'</td>'
-    +'<td class="am" style="font-size:11px;color:var(--red)">'+(c.pen&&Number(c.pen)>0?'Rs '+R(c.pen):'-')+'</td>'
-    +'<td>'+(rec?'<div style="display:flex;align-items:center;gap:4px"><div class="ava" style="background:'+rec.col+';width:20px;height:20px;font-size:8px">'+rec.name[0]+'</div><span style="font-size:10px;color:var(--muted)">'+rec.name.split(' ')[0]+'</span></div>':'<span style="font-size:10px;color:var(--dim)">'+(c.by||'-')+'</span>')+'</td>'
-    +'<td style="font-size:11px;color:var(--muted)">'+(c.note||'-')+'</td>'
-    +(isAdmin()?'<td><button class="btn btn-sm btn-d" data-cid="'+c.id+'" onclick="delCol(this.dataset.cid)">Del</button></td>':'')
-    +'</tr>';
+function renderCols(cols) {
+  if (!cols.length) return '<tr><td colspan="8"><div class="empty"><p>No collections</p></div></td></tr>';
+
+  // Calculate slice range
+  var start = (currentCollPage - 1) * rowsPerPage;
+  var end = start + rowsPerPage;
+  var paginatedCols = cols.slice(start, end);
+
+  var html = paginatedCols.map(function(c) {
+    var rec = c.by ? db.users.find(function(u){return u.un===c.by;}) : null;
+    return '<tr>'
+      + '<td style="font-size:11px">'+c.date+'</td>'
+      + '<td style="font-family:var(--mono);font-size:11px;color:var(--blue)">'+c.lid+'</td>'
+      + '<td><strong>'+c.cn+'</strong></td>'
+      + '<td class="am amp">'+R(c.amt)+'</td>'
+      + '<td class="am" style="font-size:11px;color:var(--red)">'+(c.pen && Number(c.pen)>0 ? 'Rs '+R(c.pen) : '-')+'</td>'
+      + '<td>'+(rec?'<div style="display:flex;align-items:center;gap:4px"><div class="ava" style="background:'+rec.col+';width:20px;height:20px;font-size:8px">'+rec.name[0]+'</div><span style="font-size:10px;color:var(--muted)">'+rec.name.split(' ')[0]+'</span></div>':'<span style="font-size:10px;color:var(--dim)">'+(c.by||'-')+'</span>')+'</td>'
+      + '<td style="font-size:11px;color:var(--muted)">'+(c.note||'-')+'</td>'
+      + (isAdmin() ? '<td><button class="btn btn-sm btn-d" data-cid="'+c.id+'" onclick="delCol(this.dataset.cid)">Del</button></td>' : '')
+      + '</tr>';
   }).join('');
+
+  // Add pagination controls below the table
+  var totalPages = Math.ceil(cols.length / rowsPerPage);
+  html += '<tr><td colspan="8" style="text-align:center;padding:10px">'
+    + '<button class="btn btn-xs" onclick="changePage(-1)" '+(currentCollPage===1?'disabled':'')+'>« Prev</button>'
+    + '<span style="margin:0 15px;font-size:12px">Page '+currentCollPage+' of '+totalPages+'</span>'
+    + '<button class="btn btn-xs" onclick="changePage(1)" '+(currentCollPage===totalPages?'disabled':'')+'>Next »</button>'
+    + '</td></tr>';
+
+  return html;
 }
 
-function filterCols(d){document.getElementById('colhist').innerHTML=renderCols(d?db.collections.filter(c=>c.date===d).reverse():db.collections.slice().reverse());}
+function filterCols(d) {
+  currentCollPage = 1; // Reset to page 1
+  document.getElementById('colhist').innerHTML = renderCols(d ? db.collections.filter(c => c.date === d).reverse() : db.collections.slice().reverse());
+}
 
 function payModal(lid){
   lid=lid||'';
@@ -3098,6 +3118,11 @@ function syncLoanSchedule(lid) {
 
   // 4. Update Supabase with the corrected schedule
   sbUpdate('loans', lid, { sch: JSON.stringify(l.sch) });
+}
+function changePage(dir) {
+  currentCollPage += dir;
+  // Trigger a re-render of the collections page
+  pgColl(); 
 }
 </script>
 </body>
