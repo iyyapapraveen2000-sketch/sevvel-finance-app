@@ -2610,17 +2610,18 @@ function downloadAuditPDF(mode) {
   }
 
   let tableRows = '';
-  let totAmt=0, totPaid=0, totBal=0;
+  let totLoan=0, totDisb=0, totPaid=0, totBal=0;
 
   lFilt.forEach(l => {
      let col = db.collections.filter(c => c.lid === l.id).reduce((s,c) => s+Number(c.amt||0), 0);
      let bal = Math.max(0, l.amt - col);
-     totAmt += l.amt; totPaid += col; totBal += bal;
+     totLoan += l.amt; totDisb += (l.dis || 0); totPaid += col; totBal += bal;
      tableRows += '<tr>'
        +'<td style="padding:8px;border:1px solid #ddd">'+(l.on||l.sd)+'</td>'
        +'<td style="padding:8px;border:1px solid #ddd;font-family:monospace;color:#0099ff">'+l.id+'</td>'
        +'<td style="padding:8px;border:1px solid #ddd"><strong>'+l.cn+'</strong></td>'
        +'<td style="padding:8px;border:1px solid #ddd;text-align:right">₹'+l.amt.toLocaleString('en-IN')+'</td>'
+       +'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:#4d9fff">₹'+(l.dis||0).toLocaleString('en-IN')+'</td>'
        +'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:green;font-weight:bold">₹'+col.toLocaleString('en-IN')+'</td>'
        +'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:red;font-weight:bold">₹'+bal.toLocaleString('en-IN')+'</td>'
      +'</tr>';
@@ -2628,21 +2629,22 @@ function downloadAuditPDF(mode) {
 
   tableRows += '<tr style="font-weight:900;background:#f5f5f5;font-size:16px">'
     +'<td colspan="3" style="padding:12px;border:1px solid #ddd;text-align:right">TOTALS</td>'
-    +'<td style="padding:12px;border:1px solid #ddd;text-align:right">₹'+totAmt.toLocaleString('en-IN')+'</td>'
+    +'<td style="padding:12px;border:1px solid #ddd;text-align:right">₹'+totLoan.toLocaleString('en-IN')+'</td>'
+    +'<td style="padding:12px;border:1px solid #ddd;text-align:right;color:#4d9fff">₹'+totDisb.toLocaleString('en-IN')+'</td>'
     +'<td style="padding:12px;border:1px solid #ddd;text-align:right;color:green">₹'+totPaid.toLocaleString('en-IN')+'</td>'
     +'<td style="padding:12px;border:1px solid #ddd;text-align:right;color:red">₹'+totBal.toLocaleString('en-IN')+'</td>'
   +'</tr>';
 
   let printWindow = window.open('', '_blank');
   let htmlDoc = '<html><head><title>Audit Report - Sevvel Finance</title>'
-    +'<style>body{font-family:Arial,sans-serif;padding:30px;color:#333} h2{color:#00d4aa;margin-bottom:5px} table{width:100%;border-collapse:collapse;margin-top:25px;font-size:14px} th{background:#111520;color:#fff;padding:12px;text-align:left;border:1px solid #444} td{border:1px solid #ddd}</style>'
+    +'<style>body{font-family:Arial,sans-serif;padding:30px;color:#333} h2{color:#00d4aa;margin-bottom:5px} table{width:100%;border-collapse:collapse;margin-top:25px;font-size:12px} th{background:#111520;color:#fff;padding:10px;text-align:left;border:1px solid #444} td{border:1px solid #ddd}</style>'
     +'</head><body>'
     +'<h2>Sevvel Finance - Detailed Audit Report</h2>'
     +'<p style="margin:0"><strong>Period:</strong> '+periodTitle+'</p>'
     +'<p style="margin:5px 0 0 0"><strong>Generated On:</strong> '+new Date().toLocaleString()+'</p>'
-    +'<table><thead><tr><th>Date Disbursed</th><th>Loan ID</th><th>Customer Name</th><th style="text-align:right">Loan Amount</th><th style="text-align:right">Paid Up To Now</th><th style="text-align:right">Pending Balance</th></tr></thead>'
+    +'<table><thead><tr><th>Date</th><th>Loan ID</th><th>Customer Name</th><th style="text-align:right">Loan Amt</th><th style="text-align:right">Disbursed</th><th style="text-align:right">Collected</th><th style="text-align:right">Balance</th></tr></thead>'
     +'<tbody>'+tableRows+'</tbody></table>'
-    +'<scr'+'ipt>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); };</scr'+'ipt>'
+    +'<script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); };<\/script>'
     +'</body></html>';
     
   printWindow.document.write(htmlDoc);
