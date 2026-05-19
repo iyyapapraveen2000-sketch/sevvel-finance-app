@@ -1823,6 +1823,41 @@ function delChitEntry(idx){
   });
 }
 
+// --- MISSING BUTTON MODAL FUNCTIONS ---
+function addLoanM(){
+  document.getElementById('mttl').textContent='New Loan';
+  document.getElementById('mbd').innerHTML='<div class="fgrid">'
+  +'<div class="fg full"><label>CUSTOMER *</label><select id="lCust"><option value="">Select customer...</option>'+db.customers.map(c=>'<option value="'+c.id+'">'+c.name+' ('+c.id+')</option>').join('')+'</select></div>'
+  +'<div class="fg full"><label>LOAN TYPE *</label><select id="lType" onchange="onLT()"><option value="">Select type...</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="short">Short Term</option><option value="emi">EMI</option></select></div>'
+  +'<div class="fg"><label>AMOUNT (₹) *</label><input id="lAmt" type="number" oninput="calcL()"></div>'
+  +'<div class="fg"><label id="lIL">INTEREST (₹)</label><input id="lInt" type="number" oninput="calcL()"></div>'
+  +'<div class="fg"><label>DC (₹)</label><input id="lDC" type="number" oninput="calcL()"></div>'
+  +'<div class="fg"><label>DURATION</label><input id="lDur" type="number" oninput="calcL()"></div>'
+  +'<div class="fg"><label>DATE</label><input id="lSD" type="date" value="'+td()+'"></div>'
+  +'</div><div class="calc" id="lcalc" style="display:none"><div id="lcalcr"></div></div>';
+  document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Cancel</button><button class="btn btn-p" onclick="saveLoan()">Create Loan</button>';
+  oM();
+}
+
+function addCustM(){
+  document.getElementById('mttl').textContent='Add Customer';
+  document.getElementById('mbd').innerHTML='<div class="fgrid"><div class="fg"><label>NAME</label><input id="cN"></div><div class="fg"><label>PHONE</label><input id="cP"></div><div class="fg full"><label>ADDRESS</label><input id="cA"></div></div>';
+  document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Cancel</button><button class="btn btn-p" onclick="saveCust()">Save</button>';
+  oM();
+}
+
+function payModal(lid){
+  document.getElementById('mttl').textContent='Record Payment';
+  var activeLoans = db.loans.filter(function(l){return l.st!=='closed';});
+  var html = '<div class="fgrid"><div class="fg full"><label>LOAN</label><select id="pL" onchange="onPayL()"><option value="">Select...</option>'+activeLoans.map(l=>'<option value="'+l.id+'" '+(l.id===lid?'selected':'')+'>'+l.id+' - '+l.cn+'</option>').join('')+'</select></div>'
+  +'<div class="fg"><label>AMOUNT</label><input id="pA" type="number"></div><div class="fg"><label>PENALTY</label><input id="pPen" type="number" value="0"></div>'
+  +'<div class="fg full"><label>NOTE</label><input id="pN"></div></div><div id="pInfo" class="calc" style="display:none"></div>';
+  document.getElementById('mbd').innerHTML = html;
+  document.getElementById('mft').innerHTML='<button class="btn btn-s" onclick="cM()">Cancel</button><button class="btn btn-p" onclick="savePay()">Record</button>';
+  oM();
+  if(lid) onPayL();
+}
+// --------------------------------------
 function pgDash(){
   var act=db.loans.filter(function(l){return l.st==='active';}).length;
   var clo=db.loans.filter(function(l){return l.st==='closed';}).length;
