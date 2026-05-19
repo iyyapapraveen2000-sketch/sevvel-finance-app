@@ -905,53 +905,32 @@ async function doLogin(){
   var errEl=document.getElementById('lerr');
   if(!u||!p){errEl.style.display='block';errEl.textContent='Enter username and password';return;}
 
-  var FALLBACK_USERS=[
-    {id:'U100',name:'Admin User',  un:'admin',  pw:'admin123',  role:'admin',  st:'active',col:'#ff4757',ll:null},
-    {id:'U101',name:'Selvam Kumar',un:'selvam', pw:'selvam123', role:'partner',st:'active',col:'#0099ff',ll:null},
-    {id:'U102',name:'Karthik R',   un:'karthik',pw:'karthik123',role:'partner',st:'active',col:'#f5c842',ll:null},
-    {id:'U103',name:'Priya Staff', un:'priya',  pw:'priya123',  role:'staff',  st:'active',col:'#00d4aa',ll:null},
-    {id:'U104',name:'Anand Kumar', un:'anand',  pw:'anand123',  role:'staff',  st:'active',col:'#c864ff',ll:null},
-  ];
-
-  // Check hardcoded first
-  var usr=FALLBACK_USERS.find(function(x){return x.un.toLowerCase()===u&&x.pw===p&&x.st==='active';});
-
-  // Try Supabase for non-hardcoded users
-  if(!usr){
-    showLoader(true);
-    try{
-      var r=await SB.from('users').select('*');
-      if(!r.error && r.data) {
-        db.users=r.data;
-        usr=db.users.find(function(x){return x.un&&x.un.toLowerCase()===u&&x.pw===p&&x.st==='active';});
-      }
-    }catch(e){console.warn('Supabase login failed:',e);}
-    showLoader(false);
-  } else {
-    if(!db.users.find(function(x){return x.id===usr.id;})) db.users.push(usr);
-  }
-
-  if(!usr){errEl.style.display='block';errEl.textContent='Invalid username or password.';return;}
-  errEl.style.display='none';
-  CU=usr;
-  var loginTime=nw(); usr.ll=loginTime;
-  // Silently update last login — don't block or show errors
-  SB.from('users').update({ll:loginTime}).eq('id',usr.id).then(function(){}).catch(function(){});
-
   showLoader(true);
-  try{ await loadAll(); }catch(e){ console.warn('loadAll failed:',e); }
+  try {
+    var r = await SB.from('users').select('*');
+    if(!r.error && r.data) {
+       db.users = r.data;
+       var usr = db.users.find(function(x){return x.un && x.un.toLowerCase()===u && x.pw===p && x.st==='active';});
+       if(usr) {
+         CU = usr;
+         var loginTime = nw();
+         SB.from('users').update({ll:loginTime}).eq('id',usr.id).then(function(){});
+         await loadAll();
+         addLog('login','logged in','Role: '+rll(usr.role));
+         refreshSB();
+         document.getElementById('loginPg').style.display = 'none';
+         document.getElementById('shell').style.display = 'flex';
+         document.getElementById('shell').classList.add('on');
+         go('dashboard');
+         try{ setupRealtime(); }catch(e){}
+         showLoader(false);
+         return;
+       }
+    }
+  } catch(e) { console.error('Login failed', e); }
   showLoader(false);
-
-  addLog('login','logged in','Role: '+rll(usr.role));
-  refreshSB();
-  
-  // Force UI to switch
-  document.getElementById('loginPg').style.display = 'none';
-  document.getElementById('shell').style.display = 'flex';
-  document.getElementById('shell').classList.add('on');
-  
-  go('dashboard');
-  try{ setupRealtime(); }catch(e){}
+  errEl.style.display='block';
+  errEl.textContent='Invalid username or password.';
 }
 
 function logout(){
@@ -965,7 +944,6 @@ function logout(){
   db.customers=[];db.loans=[];db.collections=[];db.partners=[];db.logs=[];
 }
 
-// ── NAV ──────────────────────────────────────────────────────
 function go(page){
   if(!CU) return;
   if(['users','actlogs'].includes(page)&&!isAdmin()){closeSB();permDenied();setAct(page);return;}
@@ -973,12 +951,15 @@ function go(page){
   setAct(page);
   document.getElementById('tbtl').textContent=pgNames[page]||page;
   closeSB(); document.getElementById('gsi').value='';
+  
   var routes = {
     dashboard: pgDash, customers: pgCust, loans: pgLoans, collections: pgColl,
     partners: pgPart, profit: pgProfit, audit: pgAudit, reports: pgRep, 
     users: pgUsers, actlogs: pgLogs, backup: pgBackup, settings: pgSet
   };
-  (routes[page] || pgDash)();
+  
+  if(routes[page]) routes[page]();
+  else pgDash();
 }
 function setAct(p){
   document.querySelectorAll('.ni').forEach(function(n){n.classList.toggle('on',n.dataset.p===p);});
