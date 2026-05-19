@@ -332,14 +332,21 @@ select option{background:var(--card);}
 @keyframes slideIn{from{transform:translateX(100%);opacity:0;}to{transform:none;opacity:1;}}
 
 /* ── MODAL ── */
-.mwrap{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:none;}
-.mwrap.on{display:flex;}
-.modal{
-  background:var(--card);border:1px solid var(--bdr2);border-radius:20px;
-  width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;
-  box-shadow:var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.06);
-  animation:popIn .25s cubic-bezier(.34,1.56,.64,1);
-  margin:16px;
+/* Update this in your CSS section */
+.mwrap {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 999999 !important; /* Force to the very top */
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto; /* Ensure it captures clicks */
+}
+
+.mwrap.on {
+  display: flex !important;
 }
 @keyframes popIn{from{transform:scale(.94);opacity:0;}to{transform:none;opacity:1;}}
 .mhd{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--bdr);}
@@ -1853,11 +1860,19 @@ function pgDash(){
   h+='<div class="stat blue"><div class="stat-lbl">Closed</div><div class="stat-val cb">'+clo+'</div></div>';
   h+='<div class="stat red"><div class="stat-lbl">Overdue</div><div class="stat-val cr">'+ov+'</div></div>';
   h+='<div class="stat gold"><div class="stat-lbl">Total Loans</div><div class="stat-val cgo" style="font-size:15px">'+R(tla)+'</div></div>';
-  h+='<div class="stat orange" style="cursor:pointer" data-dm="collected" onclick="dashModal(this.dataset.dm)"><div class="stat-lbl">Collected Today</div><div class="stat-val co" style="font-size:15px">'+R(tday)+'</div></div>';
-  h+='<div class="stat purple" style="cursor:pointer" data-dm="duetoday" onclick="dashModal(this.dataset.dm)"><div class="stat-lbl">Due Today</div><div class="stat-val cp">'+dueTodayL.length+'</div></div>';
-  h+='<div class="stat teal" style="cursor:pointer" data-dm="topup" onclick="dashModal(this.dataset.dm)"><div class="stat-lbl">Top-Up Loans</div><div class="stat-val ct">'+topupL.length+'</div></div>';
-  if(isAdmin()){h+='<div class="stat green" style="cursor:pointer" data-dm="chit" onclick="dashModal(this.dataset.dm)"><div class="stat-lbl">Chit Fund</div><div class="stat-val cg" style="font-size:14px">'+R(chitBal)+'</div></div>';}
-  h+='<div class="stat '+(cih>=0?'teal':'red')+'" style="cursor:pointer" data-dm="cash" onclick="dashModal(this.dataset.dm)">';
+  h += '<div class="stat orange" style="cursor:pointer" data-dm="collected" onclick="event.stopPropagation(); dashModal(this.dataset.dm)">';
+  h += '<div class="stat-lbl">Collected Today</div><div class="stat-val co" style="font-size:15px">'+R(tday)+'</div></div>';
+  h += '<div class="stat purple" style="cursor:pointer" data-dm="duetoday" onclick="event.stopPropagation(); dashModal(this.dataset.dm)">';
+  h += '<div class="stat-lbl">Due Today</div><div class="stat-val cp">'+dueTodayL.length+'</div></div>';
+  h += '<div class="stat teal" style="cursor:pointer" data-dm="topup" onclick="event.stopPropagation(); dashModal(this.dataset.dm)">';
+  h += '<div class="stat-lbl">Top-Up Loans</div><div class="stat-val ct">'+topupL.length+'</div></div>';
+  if(isAdmin()){
+      h += '<div class="stat green" style="cursor:pointer" data-dm="chit" onclick="event.stopPropagation(); dashModal(this.dataset.dm)">';
+      h += '<div class="stat-lbl">Chit Fund</div><div class="stat-val cg" style="font-size:14px">'+R(chitBal)+'</div></div>';
+  }
+  h += '<div class="stat '+(cih>=0?'teal':'red')+'" style="cursor:pointer" data-dm="cash" onclick="event.stopPropagation(); dashModal(this.dataset.dm)">';
+  h += '<div class="stat-lbl">Cash in Hand</div>';
+  h += '<div class="stat-val '+(cih>=0?'ct':'cr')+'" style="font-size:16px;margin-bottom:6px">'+R(cih)+'</div>';
   h+='<div class="stat-lbl">Cash in Hand</div>';
   h+='<div class="stat-val '+(cih>=0?'ct':'cr')+'" style="font-size:16px;margin-bottom:6px">'+R(cih)+'</div>';
   h+='<div style="display:flex;justify-content:space-between;font-size:10px;border-top:1px solid rgba(255,255,255,.15);padding-top:5px">';
