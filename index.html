@@ -47,7 +47,6 @@
   --glow-p:   0 0 20px rgba(139,92,246,.2);
 }
 
-/* Update your existing html, body block to this: */
 html, body {
   height: 100%;
   width: 100%;
@@ -56,12 +55,10 @@ html, body {
   color: var(--txt);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
-  
-  /* ADD THESE THREE LINES: */
-  overflow-y: auto;          /* Allows the page to scroll vertically */
-  overflow-x: hidden;        /* Prevents weird side-to-side scrolling */
-  -webkit-overflow-scrolling: touch; /* Smooth kinetic scrolling for iPhone/Android */
-  /* Prevents the browser from zooming in when you tap an input field */
+  /* Allow vertical scroll */
+  overflow-y: auto; 
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   touch-action: manipulation;
 }
 /* ── SCROLLBAR ── */
@@ -127,7 +124,12 @@ html, body {
 /* ═══════════════════════════════════════════
    SHELL LAYOUT
 ═══════════════════════════════════════════ */
-#shell{display:none;height:100vh;overflow:hidden;}
+#shell {
+  display: none; 
+  height: auto; 
+  min-height: 100dvh; 
+  overflow-x: hidden;
+}
 #shell.on{display:flex;}
 .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;backdrop-filter:blur(2px);}
 @media(max-width:768px){.ov.show{display:block;}}
@@ -180,20 +182,7 @@ html, body {
 .logout-btn:hover{background:rgba(255,71,87,.1);color:var(--red);border-color:rgba(255,71,87,.3);}
 
 /* ── MAIN ── */
-.main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow-y: auto; /* Ensure the main area can scroll */
-}
-
-.pg {
-  flex: 1;
-  padding: 20px;
-  background: var(--bg);
-  min-height: 100%; /* Ensure the page grows with content */
-}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;}
 .topbar{
   height: calc(var(--top-h) + env(safe-area-inset-top)); 
   padding-top: env(safe-area-inset-top);
@@ -237,23 +226,7 @@ html, body {
 .ssu{font-size:13px;color:var(--muted);margin-top:2px;}
 
 /* ── STAT CARDS ── */
-.stats {
-  display: grid;
-  /* This ensures 2 columns on phones, and more on desktops */
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
-  width: 100%;
-}
-
-.charts {
-  display: grid;
-  /* Force 1 column on phones to prevent horizontal scrolling */
-  grid-template-columns: 1fr; 
-  gap: 14px;
-  margin-bottom: 20px;
-  width: 100%;
-}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
 .stat{
   background:var(--card);border:1px solid var(--bdr);border-radius:var(--rad);
   padding:16px;position:relative;overflow:hidden;transition:all .2s;
@@ -415,14 +388,7 @@ select option{background:var(--card);}
 .lt-user{background:rgba(139,92,246,.15);color:var(--purple);}
 
 /* ── CHARTS ── */
-.charts {
-  display: grid;
-  /* Force 1 column on phones to prevent horizontal scrolling */
-  grid-template-columns: 1fr; 
-  gap: 14px;
-  margin-bottom: 20px;
-  width: 100%;
-}
+.charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:20px;}
 .cbox{background:var(--card);border:1px solid var(--bdr);border-radius:var(--rad);padding:18px;}
 .cttl{font-size:13px;font-weight:700;margin-bottom:14px;color:var(--muted);}
 .cwrap{height:180px;position:relative;}
@@ -496,23 +462,8 @@ select option{background:var(--card);}
 
 /* ── RESPONSIVE ── */
 @media(max-width:768px){
-  .stats {
-  display: grid;
-  /* This ensures 2 columns on phones, and more on desktops */
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
-  width: 100%;
-}
-
-.charts {
-  display: grid;
-  /* Force 1 column on phones to prevent horizontal scrolling */
-  grid-template-columns: 1fr; 
-  gap: 14px;
-  margin-bottom: 20px;
-  width: 100%;
-}
+  .stats{grid-template-columns:repeat(2,1fr);}
+  .charts{grid-template-columns:1fr;}
   .ugrid{grid-template-columns:1fr;}
   .welcome-actions{display:none;}
   .tb-srch{display:none;}
@@ -2230,7 +2181,8 @@ function calcL(){
   else if(t==='monthly'){md=aM(sd,dur);html='<div class="crow"><span>Loan Amount</span><span>'+R(amt)+'</span></div><div class="crow"><span>Monthly Interest</span><span>'+R(int)+'</span></div><div class="crow"><span>Customer Receives</span><span style="color:var(--green)">'+R(amt-dc)+'</span></div><div class="crow"><span>Last Month Payment</span><span>'+R(amt+int)+'</span></div><div class="crow"><span>Maturity</span><span>'+md+'</span></div>';}
   else if(t==='short'){md=aD(sd,dur);html='<div class="crow"><span>Loan Amount</span><span>'+R(amt)+'</span></div><div class="crow"><span>Interest at Maturity</span><span>'+R(int)+'</span></div><div class="crow"><span>Total Repayable</span><span>'+R(amt+int)+'</span></div><div class="crow"><span>Maturity</span><span>'+md+'</span></div>';}
   else if(t==='emi'){const tr=emi*dur,ti=tr-amt;md=aM(sd,dur);if(document.getElementById('lInt'))document.getElementById('lInt').value=ti>0?ti:'';html='<div class="crow"><span>Loan Amount</span><span>'+R(amt)+'</span></div><div class="crow"><span>EMI Amount</span><span>'+R(emi)+'</span></div><div class="crow"><span>Total Repayable</span><span>'+R(tr)+'</span></div><div class="crow"><span>Total Interest</span><span style="color:var(--gold)">'+R(ti)+'</span></div><div class="crow"><span>Maturity</span><span>'+md+'</span></div>';}
-  document.getElementById('lcalc').style.display='';
+ // Change this line in calcL()
+  document.getElementById('lcalc').style.display = 'block';
   document.getElementById('lcalcr').innerHTML=html;
 }
 
