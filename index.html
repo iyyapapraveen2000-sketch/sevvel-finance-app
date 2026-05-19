@@ -1542,14 +1542,29 @@ function pgRep() {
 // ── ACTIVITY LOGS ─────────────────────────────────────────────
 async function clearLogs() {
   cConfirm('Delete logs older than 30 days?', async function() {
-    var cut = aD(td(),-30);
-    var before = db.logs.length;
-    // Fix: Clear from Supabase first, then update local cache
-    var { error } = await SB.from('logs').delete().lt('ts', cut);
-    if (error) { toast('Clear error: '+error.message, 'error'); return; }
+    // 1. Calculate the cutoff date (30 days ago) in YYYY-MM-DD format
+    var cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    var cutoffStr = cutoff.toISOString().slice(0, 10); 
     
-    db.logs = db.logs.filter(function(l){ return l.ts >= cut; });
-    toast('Cleared '+(before-db.logs.length)+' old logs','success');
+    toast('Clearing logs...','info');
+
+    // 2. Delete from Supabase
+    // We filter by the 'ts' column which contains the date
+    var { error } = await SB.from('logs').delete().lt('ts', cutoffStr + ' 00:00');
+    
+    if (error) { 
+      toast('Clear error: '+error.message, 'error'); 
+      return; 
+    }
+    
+    // 3. Update local cache (only keep logs from the last 30 days)
+    var before = db.logs.length;
+    db.logs = db.logs.filter(function(l){ 
+        return l.ts.slice(0, 10) >= cutoffStr; 
+    });
+    
+    toast('Cleared '+(before - db.logs.length)+' logs successfully', 'success');
     pgLogs();
   });
 }
