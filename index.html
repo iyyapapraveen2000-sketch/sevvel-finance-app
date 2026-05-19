@@ -48,18 +48,16 @@
 }
 
 html, body {
-  height: 100%;
+  height: auto; /* Changed from 100% to auto */
+  min-height: 100%;
   width: 100%;
   font-family: var(--ff);
   background: var(--bg);
   color: var(--txt);
   font-size: 14px;
-  -webkit-font-smoothing: antialiased;
-  /* Allow vertical scroll */
-  overflow-y: auto; 
+  overflow-y: auto; /* Ensures vertical scrolling works */
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  touch-action: manipulation;
 }
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar{width:4px;height:4px;}
@@ -353,13 +351,13 @@ select option{background:var(--card);}
 .mwrap {
   position: fixed !important;
   inset: 0 !important;
-  z-index: 999999 !important; /* Force to the very top */
+  z-index: 999999 !important;
   background: rgba(0,0,0,0.8);
-  backdrop-filter: blur(4px);
   display: none;
-  align-items: center;
+  align-items: flex-start; /* Changed from center to flex-start */
   justify-content: center;
-  pointer-events: auto; /* Ensure it captures clicks */
+  overflow-y: auto; /* Allows the modal to scroll */
+  padding-top: 50px; /* Gives space for the notch/header */
 }
 
 .mwrap.on {
