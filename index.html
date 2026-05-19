@@ -1253,7 +1253,12 @@ async function savePay() {
     toast('Payment recorded: '+R(amt)+(pen?' + Penalty '+R(pen):''),'success');
   }
 
-  if(shouldClose){ l.st='closed'; loanUpdates.st='closed'; }
+  if(shouldClose){ 
+    l.st='closed'; loanUpdates.st='closed'; 
+  } else if (l.st === 'overdue') {
+    var stillOv = schArr.some(function(s){return !s.p && s.d < td();});
+    if (!stillOv) { l.st='active'; loanUpdates.st='active'; }
+  }
   await sbUpdate('loans', lid, loanUpdates);
   cM(); pgColl();
 }
@@ -1583,7 +1588,7 @@ function dashModal(type){
       html+='</tbody></table></div>';
     }
   } else if(type==='duetoday'){
-    const dueToday=db.loans.filter(function(l){return l.st!=='closed'&&l.md===td();});
+    const dueToday=db.loans.filter(function(l){return l.st!=='closed' && l.sch && l.sch.some(function(s){return !s.p && s.d === td();});});
     const totalBal=dueToday.reduce(function(s,l){const col=db.collections.filter(function(c){return c.lid===l.id;}).reduce(function(x,c){return x+Number(c.amt);},0);return s+Math.max(0,l.amt-col);},0);
     title='📅 Due Today — '+td();
     if(!dueToday.length){html='<div class="empty" style="padding:30px"><div class="empty-ic">🎉</div><p>No loans due today!</p></div>';}
@@ -1745,18 +1750,14 @@ function pgDash(){
   
   // Auto-mark overdue in memory (md < today and not closed)
   db.loans.forEach(function(l){
-    if(l.st==='active' && l.md && l.md < td()) {
-      l.st='overdue';
-      // Silently update in Supabase
-      SB.from('loans').update({st:'overdue'}).eq('id',l.id).then(function(){}).catch(function(){});
-    }
+    var isOv = l.sch && l.sch.length ? l.sch.some(function(s){return !s.p && s.d < td();}) : (l.md && l.md < td());
+    if(isOv && l.st==='active'){l.st='overdue'; SB.from('loans').update({st:'overdue'}).eq('id',l.id).then(function(){}); }
+    else if(!isOv && l.st==='overdue'){l.st='active'; SB.from('loans').update({st:'active'}).eq('id',l.id).then(function(){}); }
   });
   var ovL=db.loans.filter(function(l){return l.st==='overdue';});
-  // Due today: active loans maturing today
-  var dueTodayL=db.loans.filter(function(l){return l.st==='active'&&l.md===td();});
-  // Due this week: active loans maturing in next 1-7 days (not today)
+  var dueTodayL=db.loans.filter(function(l){return l.st!=='closed' && l.sch && l.sch.some(function(s){return !s.p && s.d === td();});});
   var weekEnd=aD(td(),7);
-  var dueL=db.loans.filter(function(l){return l.st==='active'&&l.md>td()&&l.md<=weekEnd;});
+  var dueL=db.loans.filter(function(l){return l.st!=='closed' && l.sch && l.sch.some(function(s){return !s.p && s.d > td() && s.d <= weekEnd;});});
   var topupL=db.loans.filter(function(l){return l.topupOf;});
   var chitBal=(db.cfg.chit&&db.cfg.chit.chitBalance)||0;
   var tInv=db.partners.reduce(function(s,p){return s+Number(p.inv);},0);
@@ -1799,7 +1800,11 @@ function pgDash(){
   h+='</div></div>';
   h+='<div class="tc"><div class="th"><div class="tt">Due This Week ('+dueL.length+')</div></div><div style="padding:10px">';
   if(!dueL.length){h+='<div class="empty"><p>None due soon</p></div>';}
-  else{dueL.forEach(function(l){h+='<div class="alert warn"><div class="alert-b"><strong>'+l.cn+'</strong><small>'+l.id+' - Due: '+l.md+'</small></div><button class="btn btn-sm btn-p" data-lid="'+l.id+'" onclick="payModal(this.dataset.lid)">Pay</button></div>';});}
+  else{dueL.forEach(function(l){
+    var nextDue = l.sch ? l.sch.find(function(s){return !s.p;}) : null;
+    var dueStr = nextDue ? nextDue.d : l.md;
+    h+='<div class="alert warn"><div class="alert-b"><strong>'+l.cn+'</strong><small>'+l.id+' - Due: '+dueStr+'</small></div><button class="btn btn-sm btn-p" data-lid="'+l.id+'" onclick="payModal(this.dataset.lid)">Pay</button></div>';
+  });}
   h+='</div></div>';
   h+='<div class="tc"><div class="th"><div class="tt">Recent Loans</div><button class="btn btn-sm btn-p" onclick="go(\'loans\')">All</button></div><div style="padding:8px">';
   var rl=db.loans.slice().reverse().slice(0,5);
@@ -1992,7 +1997,9 @@ function renderLT(list){
     var col=db.collections.filter(function(c){return c.lid===l.id;}).reduce(function(s,c){return s+Number(c.amt);},0);
     var pct=l.amt>0?Math.min(100,Math.round(col/l.amt*100)):0;
     var cr=l.by?db.users.find(function(u){return u.un===l.by;}):null;
-    if(l.md<td()&&l.st==='active'){l.st='overdue'; SB.from('loans').update({st:'overdue'}).eq('id',l.id).then(function(){}); }
+    var isOv = l.sch && l.sch.length ? l.sch.some(function(s){return !s.p && s.d < td();}) : (l.md && l.md < td());
+    if(isOv && l.st==='active'){l.st='overdue'; SB.from('loans').update({st:'overdue'}).eq('id',l.id).then(function(){}); }
+    else if(!isOv && l.st==='overdue'){l.st='active'; SB.from('loans').update({st:'active'}).eq('id',l.id).then(function(){}); }
     html+='<tr style="'+(l.st==='overdue'?'background:rgba(255,71,87,.03)':'')+'">';
     html+='<td style="font-family:var(--mono);font-size:11px;color:var(--blue)">'+l.id+(l.topupOf?'<span style="font-size:9px;background:var(--teal);color:#000;border-radius:4px;padding:1px 4px;margin-left:4px">TU</span>':'')+'</td>';
     html+='<td><strong>'+l.cn+'</strong></td>';
@@ -2243,7 +2250,9 @@ function pgColl(){
   actL.forEach(l=>{
     const col=db.collections.filter(c=>c.lid===l.id).reduce((s,c)=>s+Number(c.amt),0);
     const bal=l.amt-col;
-    if(l.md<td()&&l.st!=='closed'){l.st='overdue'; SB.from('loans').update({st:'overdue'}).eq('id',l.id).then(function(){}); }
+    var isOv = l.sch && l.sch.length ? l.sch.some(function(s){return !s.p && s.d < td();}) : (l.md && l.md < td());
+    if(isOv && l.st==='active'){l.st='overdue'; SB.from('loans').update({st:'overdue'}).eq('id',l.id).then(function(){}); }
+    else if(!isOv && l.st==='overdue'){l.st='active'; SB.from('loans').update({st:'active'}).eq('id',l.id).then(function(){}); }
     html+='<tr style="'+(l.st==='overdue'?'background:rgba(255,71,87,.03)':'')+'">'
     +'<td style="font-family:var(--mono);font-size:11px;color:var(--blue)">'+l.id+'</td>'
     +'<td><strong>'+l.cn+'</strong></td>'
