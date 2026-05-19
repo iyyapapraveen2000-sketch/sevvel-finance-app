@@ -3027,29 +3027,28 @@ async function updateLoanTerms(lid) {
   
   if (isNaN(newDur) || isNaN(newInt)) { toast('Invalid numbers', 'error'); return; }
 
-  // REBUILD SCHEDULE LOGIC (For Monthly Interest Only)
-  var newSch = [];
-  var lastPaidIndex = l.sch.findIndex(s => s.p === false); // Find first unpaid
-  
-  for(var i = 1; i <= newDur; i++) {
-      // If the installment is already paid (in the past), keep it as is
-      if (i < lastPaidIndex + 1 && l.sch[i-1]) {
-          newSch.push(l.sch[i-1]);
-      } else {
-          // Calculate for future installments
-          // Interest-only for all months except the last one
-          var isLast = (i === newDur);
-          newSch.push({
-              n: i,
-              d: aM(l.sd, i), // Uses your existing aM helper
-              a: isLast ? (l.amt + newInt) : newInt,
-              p: false
-          });
-      }
+  // 1. Keep existing paid installments
+  var newSch = l.sch.filter(s => s.p === true);
+  var nextIndex = newSch.length + 1; // Start creating new rows after the last paid one
+  var lastDate = newSch.length > 0 ? new Date(newSch[newSch.length-1].d) : new Date(l.sd);
+
+  // 2. Build only the FUTURE installments
+  for (var i = nextIndex; i <= newDur; i++) {
+    // Increment date by 1 month for each new row
+    lastDate.setMonth(lastDate.getMonth() + 1);
+    var dueDate = lastDate.toISOString().slice(0, 10);
+
+    var isLast = (i === newDur);
+    newSch.push({
+      n: i,
+      d: dueDate,
+      a: isLast ? (l.amt + newInt) : newInt,
+      p: false
+    });
   }
 
   showLoader(true);
-  // Update DB with new terms AND the fresh schedule
+  // 3. Update DB
   var ok = await sbUpdate('loans', lid, { 
       dur: newDur, 
       interest: newInt, 
@@ -3060,10 +3059,10 @@ async function updateLoanTerms(lid) {
       l.dur = newDur;
       l.int = newInt;
       l.sch = newSch; 
-      addLog('loan', 'Updated terms for #' + lid, 'New Dur: ' + newDur + ' months, New Int: ₹' + newInt);
+      addLog('loan', 'Updated terms for #' + lid, 'New Dur: ' + newDur + ', New Int: ₹' + newInt);
       toast('Loan terms & schedule updated', 'success');
       cM(); 
-      viewLoan(lid); // Refresh the view to show the new schedule
+      viewLoan(lid); 
   }
   showLoader(false);
 }
