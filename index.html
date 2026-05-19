@@ -2317,16 +2317,17 @@ function calcTU(){
 }
 
 function pgColl(){
-  const actL=db.loans.filter(l=>l.st!=='closed');
-  let html='<div class="shead"><div><div class="sti">Collections</div><div class="ssu">Record payments</div></div><button class="btn btn-p" onclick="payModal()">➕ Record Payment</button></div>'
-  +'<div class="stats" style="margin-bottom:12px">'
-  +'<div class="stat teal"><div class="stat-lbl">Today</div><div class="stat-val ct" style="font-size:16px">'+R(db.collections.filter(c=>c.date===td()).reduce((s,c)=>s+Number(c.amt),0))+'</div></div>'
-  +'<div class="stat green"><div class="stat-lbl">This Month</div><div class="stat-val cg" style="font-size:16px">'+R(db.collections.filter(c=>c.date.slice(0,7)===td().slice(0,7)).reduce((s,c)=>s+Number(c.amt),0))+'</div></div>'
-  +'<div class="stat gold"><div class="stat-lbl">Total</div><div class="stat-val cgo" style="font-size:16px">'+R(db.collections.reduce((s,c)=>s+Number(c.amt),0))+'</div></div>'
-  +'<div class="stat orange"><div class="stat-lbl">Penalty Total</div><div class="stat-val co" style="font-size:16px">'+R(db.collections.reduce((s,c)=>s+Number(c.pen||0),0))+'</div></div>'
-  +'<div class="stat red"><div class="stat-lbl">Overdue</div><div class="stat-val cr">'+db.loans.filter(l=>l.st==='overdue').length+'</div></div>'
-  +'</div>'
-  +'<div class="tc" style="margin-bottom:12px"><div class="th"><div class="tt">Active Loan Status</div></div><div class="ts"><table><thead><tr><th>Loan ID</th><th>Customer</th><th>Type</th><th>Principal</th><th>Collected</th><th>Balance</th><th>Maturity</th><th>Status</th><th>Pay</th></tr></thead><tbody>';
+  const actL = db.loans.filter(l => l.st !== 'closed');
+  let html = '<div class="shead"><div><div class="sti">Collections</div><div class="ssu">Record payments</div></div><button class="btn btn-p" onclick="payModal()">➕ Record Payment</button></div>'
+  + '<div class="stats" style="margin-bottom:12px">'
+  + '<div class="stat teal"><div class="stat-lbl">Today</div><div class="stat-val ct" style="font-size:16px">'+R(db.collections.filter(c=>c.date===td()).reduce((s,c)=>s+Number(c.amt),0))+'</div></div>'
+  + '<div class="stat green"><div class="stat-lbl">This Month</div><div class="stat-val cg" style="font-size:16px">'+R(db.collections.filter(c=>c.date.slice(0,7)===td().slice(0,7)).reduce((s,c)=>s+Number(c.amt),0))+'</div></div>'
+  + '<div class="stat gold"><div class="stat-lbl">Total</div><div class="stat-val cgo" style="font-size:16px">'+R(db.collections.reduce((s,c)=>s+Number(c.amt),0))+'</div></div>'
+  + '<div class="stat orange"><div class="stat-lbl">Penalty Total</div><div class="stat-val co" style="font-size:16px">'+R(db.collections.reduce((s,c)=>s+Number(c.pen||0),0))+'</div></div>'
+  + '<div class="stat red"><div class="stat-lbl">Overdue</div><div class="stat-val cr">'+db.loans.filter(l=>l.st==='overdue').length+'</div></div>'
+  + '</div>'
+  + '<div class="tc" style="margin-bottom:12px"><div class="th"><div class="tt">Active Loan Status</div></div><div class="ts"><table><thead><tr><th>Loan ID</th><th>Customer</th><th>Type</th><th>Principal</th><th>Collected</th><th>Balance</th><th>Maturity</th><th>Status</th><th>Pay</th></tr></thead><tbody>';
+  
   actL.forEach(l=>{
     const col=db.collections.filter(c=>c.lid===l.id).reduce((s,c)=>s+Number(c.amt),0);
     const bal=l.amt-col;
@@ -2344,41 +2345,52 @@ function pgColl(){
     +'<td><span class="badge '+stb(l.st)+'" style="font-size:10px">'+l.st+'</span></td>'
     +'<td><button class="btn btn-sm btn-p" data-lid="'+l.id+'" onclick="payModal(this.dataset.lid)">Pay</button></td></tr>';
   });
+  
   html+='</tbody></table></div></div>'
-  +'<div class="tc"><div class="th"><div class="tt">Collection History</div>'
-  +'<input type="date" style="background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:6px 9px;font-size:12px !important;color:var(--txt);outline:none" onchange="filterCols(this.value)"></div>'
-  +'<div class="ts"><table><thead><tr><th>Date</th><th>Loan</th><th>Customer</th><th>Amount</th><th>By</th><th>Note</th>'+(isAdmin()?'<th>Del</th>':'')+'</tr></thead><tbody id="colhist">'+renderCols(db.collections.slice().reverse())+'</tbody></table></div></div>';
+  + '<div class="tc"><div class="th"><div class="tt">Collection History</div>'
+  + '<input type="date" style="background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:6px 9px;font-size:12px !important;color:var(--txt);outline:none" onchange="filterCols(this.value)"></div>'
+  + '<div class="ts"><table><thead><tr><th>Date</th><th>Loan</th><th>Customer</th><th>Amount</th><th>Penalty</th><th>By</th><th>Note</th>'+(isAdmin()?'<th>Del</th>':'')+'</tr></thead><tbody id="colhist">'+renderCols(db.collections.slice().reverse())+'</tbody></table></div></div>';
+  
   document.getElementById('pg').innerHTML=html;
 }
 
 function renderCols(cols) {
   if (!cols.length) return '<tr><td colspan="8"><div class="empty"><p>No collections</p></div></td></tr>';
-
-  // Calculate slice range
+  
   var start = (currentCollPage - 1) * rowsPerPage;
   var end = start + rowsPerPage;
   var paginatedCols = cols.slice(start, end);
 
   var html = paginatedCols.map(function(c) {
     var rec = c.by ? db.users.find(function(u){return u.un===c.by;}) : null;
+    
+    // Create the "By" user avatar/name badge
+    var byHtml = rec ? 
+      '<div style="display:flex;align-items:center;gap:4px">' +
+      '<div class="ava" style="background:'+rec.col+';width:20px;height:20px;font-size:8px">'+rec.name[0]+'</div>' +
+      '<span style="font-size:10px;color:var(--muted)">'+rec.name.split(' ')[0]+'</span></div>' : 
+      '<span style="font-size:10px;color:var(--dim)">'+(c.by||'-')+'</span>';
+
     return '<tr>'
       + '<td style="font-size:11px">'+c.date+'</td>'
       + '<td style="font-family:var(--mono);font-size:11px;color:var(--blue)">'+c.lid+'</td>'
       + '<td><strong>'+c.cn+'</strong></td>'
       + '<td class="am amp">'+R(c.amt)+'</td>'
-      + '<td class="am" style="font-size:11px;color:var(--red)">'+(c.pen && Number(c.pen)>0 ? 'Rs '+R(c.pen) : '-')+'</td>'
-      + '<td>'+(rec?'<div style="display:flex;align-items:center;gap:4px"><div class="ava" style="background:'+rec.col+';width:20px;height:20px;font-size:8px">'+rec.name[0]+'</div><span style="font-size:10px;color:var(--muted)">'+rec.name.split(' ')[0]+'</span></div>':'<span style="font-size:10px;color:var(--dim)">'+(c.by||'-')+'</span>')+'</td>'
+      // NEW PENALTY COLUMN
+      + '<td class="am" style="font-size:11px;color:var(--red)">'+(c.pen && Number(c.pen)>0 ? R(c.pen) : '-')+'</td>'
+      // CLEAN "BY" COLUMN
+      + '<td>'+byHtml+'</td>'
       + '<td style="font-size:11px;color:var(--muted)">'+(c.note||'-')+'</td>'
       + (isAdmin() ? '<td><button class="btn btn-sm btn-d" data-cid="'+c.id+'" onclick="delCol(this.dataset.cid)">Del</button></td>' : '')
       + '</tr>';
   }).join('');
 
-  // Add pagination controls below the table
+  // Pagination controls
   var totalPages = Math.ceil(cols.length / rowsPerPage);
   html += '<tr><td colspan="8" style="text-align:center;padding:10px">'
     + '<button class="btn btn-xs" onclick="changePage(-1)" '+(currentCollPage===1?'disabled':'')+'>« Prev</button>'
-    + '<span style="margin:0 15px;font-size:12px">Page '+currentCollPage+' of '+totalPages+'</span>'
-    + '<button class="btn btn-xs" onclick="changePage(1)" '+(currentCollPage===totalPages?'disabled':'')+'>Next »</button>'
+    + '<span style="margin:0 15px;font-size:12px">Page '+currentCollPage+' of '+(totalPages||1)+'</span>'
+    + '<button class="btn btn-xs" onclick="changePage(1)" '+(currentCollPage>=totalPages?'disabled':'')+'>Next »</button>'
     + '</td></tr>';
 
   return html;
