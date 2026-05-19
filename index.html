@@ -3015,26 +3015,47 @@ function pgSet(){
   +'</div>';
   document.getElementById('pg').innerHTML=html;
 }
-// ── EXTEND LOAN TERMS ──
 async function updateLoanTerms(lid) {
-  var newDur = prompt("Enter the new total duration (months/days):");
-  var newInt = prompt("Enter the new total interest amount (₹):");
+  var l = db.loans.find(x => x.id === lid);
+  if (!l) return;
+
+  var newDur = prompt("Enter the new total duration (months/days):", l.dur);
+  var newInt = prompt("Enter the new total interest amount (₹):", l.int);
   
   if (newDur === null || newInt === null) return;
+  newDur = Number(newDur); newInt = Number(newInt);
+  
   if (isNaN(newDur) || isNaN(newInt)) { toast('Please enter valid numbers', 'error'); return; }
 
+  // 1. REGENERATE THE SCHEDULE (This is the missing link!)
+  var newSch = [];
+  var sd = l.sd; 
+  // Simplified logic: adjust based on loan type
+  for(var i = 1; i <= newDur; i++) {
+      newSch.push({
+          n: i,
+          d: (l.tp === 'monthly' ? aM(sd, i) : aD(sd, i* (l.tp === 'daily' ? 1 : 7))),
+          a: +(l.amt / newDur).toFixed(2), // Adjusts installment based on new duration
+          p: false
+      });
+  }
+
   showLoader(true);
-  var l = db.loans.find(x => x.id === lid);
-  if (l) {
-    var ok = await sbUpdate('loans', lid, { dur: Number(newDur), interest: Number(newInt) });
-    if (ok) {
-      l.dur = Number(newDur);
-      l.int = Number(newInt);
+  // 2. Update DB with new duration, new interest, AND the NEW schedule
+  var ok = await sbUpdate('loans', lid, { 
+      dur: newDur, 
+      interest: newInt, 
+      sch: JSON.stringify(newSch) 
+  });
+  
+  if (ok) {
+      l.dur = newDur;
+      l.int = newInt;
+      l.sch = newSch; // Update local cache
       addLog('loan', 'Updated terms for #' + lid, 'New Duration: ' + newDur + ', New Interest: ' + newInt);
-      toast('Loan terms updated', 'success');
+      toast('Loan terms & schedule updated', 'success');
       cM(); 
-      pgLoans();
-    }
+      viewLoan(lid); // Refresh the view to show the new schedule
   }
   showLoader(false);
 }
