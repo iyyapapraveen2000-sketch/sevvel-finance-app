@@ -1864,6 +1864,7 @@ function payModal(lid){
   if(lid) onPayL();
 }
 // --------------------------------------
+
 function pgDash(){
   var act=db.loans.filter(function(l){return l.st==='active';}).length;
   var clo=db.loans.filter(function(l){return l.st==='closed';}).length;
@@ -1947,7 +1948,6 @@ function pgDash(){
     new Chart(document.getElementById('ch3'),{type:'line',data:{labels:mo,datasets:[{data:pd,borderColor:'#f5c842',backgroundColor:'rgba(245,200,66,.1)',fill:true,tension:.4,pointBackgroundColor:'#f5c842',pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8a9bbf',font:{size:9}},grid:{display:false}},y:{ticks:{color:'#8a9bbf',font:{size:9},callback:function(v){return v.toLocaleString('en-IN');}},grid:{color:'rgba(255,255,255,.05)'}}}}});
   },80);
 }
-
 function pgLogs(fa='',fu=''){
   if(!isAdmin()){permDenied();return;}
   let logs=db.logs;
