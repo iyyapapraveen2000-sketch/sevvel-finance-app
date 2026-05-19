@@ -675,16 +675,48 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 const { createClient } = supabase;
 const SB = createClient(SUPABASE_URL, SUPABASE_ANON);
-
-// ── SMART ID GENERATOR ──
-function genSafeId(prefix, list) {
-  if(!list || list.length === 0) return prefix + '001';
-  var max = 0;
-  for(var i=0; i<list.length; i++) {
-    var num = parseInt(list[i].id.replace(prefix, ''), 10);
-    if(!isNaN(num) && num > max) max = num;
-  }
-  return prefix + String(max + 1).padStart(3, '0');
+function pgDash(){
+  var act=db.loans.filter(function(l){return l.st==='active';}).length;
+  var clo=db.loans.filter(function(l){return l.st==='closed';}).length;
+  var ov=db.loans.filter(function(l){return l.st==='overdue';}).length;
+  var tla=db.loans.reduce(function(s,l){return s+Number(l.amt);},0);
+  var tday=db.collections.filter(function(c){return c.date===td();}).reduce(function(s,c){return s+Number(c.amt);},0);
+  
+  db.loans.forEach(function(l){
+    var isOv = l.sch && l.sch.length ? l.sch.some(function(s){return !s.p && s.d < td();}) : (l.md && l.md < td());
+    if(isOv && l.st==='active'){l.st='overdue'; SB.from('loans').update({st:'overdue'}).eq('id',l.id).then(function(){}); }
+    else if(!isOv && l.st==='overdue'){l.st='active'; SB.from('loans').update({st:'active'}).eq('id',l.id).then(function(){}); }
+  });
+  
+  var ovL=db.loans.filter(function(l){return l.st==='overdue';});
+  var dueTodayL=db.loans.filter(function(l){return l.st!=='closed' && l.sch && l.sch.some(function(s){return !s.p && s.d === td();});});
+  var topupL=db.loans.filter(function(l){return l.topupOf;});
+  var chitBal=(db.cfg.chit&&db.cfg.chit.chitBalance)||0;
+  var tInv=db.partners.reduce(function(s,p){return s+Number(p.inv);},0);
+  var tCol=db.collections.reduce(function(s,c){return s+Number(c.amt);},0);
+  var tDis=db.loans.reduce(function(s,l){return s+Number(l.dis||0);},0);
+  var cih=tInv+tCol-tDis;
+  
+  var h='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:12px 14px;background:var(--card);border:1px solid var(--bdr);border-radius:11px">';
+  h+='<div class="ava" style="background:'+CU.col+';width:40px;height:40px;font-size:16px">'+CU.name[0]+'</div>';
+  h+='<div><div style="font-weight:700;font-size:14px">Welcome, '+CU.name.split(' ')[0]+'!</div>';
+  h+='<div style="font-size:11px;color:var(--muted)">'+rll(CU.role)+'</div></div>';
+  if(CU.role!=='staff'){h+='<div style="margin-left:auto;display:flex;gap:8px"><button class="btn btn-p" onclick="addLoanM()">+ New Loan</button><button class="btn btn-s" onclick="topUpLoanM()">Top-Up</button></div>';}
+  h+='</div>';
+  
+  h+='<div class="stats">';
+  h+='<div class="stat teal"><div class="stat-lbl">Customers</div><div class="stat-val ct">'+db.customers.length+'</div></div>';
+  h+='<div class="stat green"><div class="stat-lbl">Active Loans</div><div class="stat-val cg">'+act+'</div></div>';
+  h+='<div class="stat red"><div class="stat-lbl">Overdue</div><div class="stat-val cr">'+ov+'</div></div>';
+  h+='<div class="stat orange" style="cursor:pointer" onclick="dashModal(\'collected\')"><div class="stat-lbl">Collected Today</div><div class="stat-val co">'+R(tday)+'</div></div>';
+  h+='</div>';
+  
+  h+='<div class="tc"><div class="th"><div class="tt">Overdue Loans</div></div><div style="padding:10px">';
+  if(!ovL.length) h+='<div class="empty"><p>No overdue loans</p></div>';
+  else ovL.forEach(l=>{ h+='<div class="alert danger"><div class="alert-b"><strong>'+l.cn+'</strong><small>'+l.id+'</small></div><button class="btn btn-sm btn-d" onclick="payModal(\''+l.id+'\')">Pay</button></div>'; });
+  h+='</div></div>';
+  
+  document.getElementById('pg').innerHTML=h;
 }
 
 // ── HELPERS ──────────────────────────────────────────────────
@@ -923,10 +955,15 @@ function cConfirm(msg,onYes){
 
 // ── AUTH ──────────────────────────────────────────────────────
 async function doLogin(){
-  var u=document.getElementById('lu').value.trim().toLowerCase();
-  var p=document.getElementById('lp').value;
-  var errEl=document.getElementById('lerr');
-  if(!u||!p){errEl.style.display='block';errEl.textContent='Enter username and password';return;}
+  var u = document.getElementById('lu').value.trim().toLowerCase();
+  var p = document.getElementById('lp').value;
+  var errEl = document.getElementById('lerr');
+  
+  if(!u || !p){
+    errEl.style.display='block';
+    errEl.textContent='Enter username and password';
+    return;
+  }
 
   var FALLBACK_USERS=[
     {id:'U100',name:'Admin User',  un:'admin',  pw:'admin123',  role:'admin',  st:'active',col:'#ff4757',ll:null},
@@ -936,41 +973,58 @@ async function doLogin(){
     {id:'U104',name:'Anand Kumar', un:'anand',  pw:'anand123',  role:'staff',  st:'active',col:'#c864ff',ll:null},
   ];
 
-  // Check hardcoded first
-  var usr=FALLBACK_USERS.find(function(x){return x.un.toLowerCase()===u&&x.pw===p&&x.st==='active';});
+  var usr = FALLBACK_USERS.find(function(x){return x.un.toLowerCase()===u && x.pw===p && x.st==='active';});
 
+  showLoader(true);
+  
   // Try Supabase for non-hardcoded users
   if(!usr){
-    showLoader(true);
     try{
-      var r=await SB.from('users').select('*');
+      var r = await SB.from('users').select('*');
       if(!r.error && r.data) {
-        db.users=r.data;
-        usr=db.users.find(function(x){return x.un&&x.un.toLowerCase()===u&&x.pw===p&&x.st==='active';});
+        db.users = r.data;
+        usr = db.users.find(function(x){return x.un && x.un.toLowerCase()===u && x.pw===p && x.st==='active';});
       }
-    }catch(e){console.warn('Supabase login failed:',e);}
-    showLoader(false);
+    } catch(e) { console.warn('Supabase login connection failed:', e); }
   } else {
     if(!db.users.find(function(x){return x.id===usr.id;})) db.users.push(usr);
   }
 
-  if(!usr){errEl.style.display='block';errEl.textContent='Invalid username or password.';return;}
-  errEl.style.display='none';
-  CU=usr;
-  var loginTime=nw(); usr.ll=loginTime;
-  // Silently update last login — don't block or show errors
-  SB.from('users').update({ll:loginTime}).eq('id',usr.id).then(function(){}).catch(function(){});
+  if(!usr){
+    showLoader(false);
+    errEl.style.display='block';
+    errEl.textContent='Invalid username or password.';
+    return;
+  }
 
-  showLoader(true);
-  try{ await loadAll(); }catch(e){ console.warn('loadAll failed:',e); }
-  showLoader(false);
+  // Login Success
+  CU = usr;
+  var loginTime = nw(); 
+  usr.ll = loginTime;
+  
+  // Update UI and Data
+  errEl.style.display = 'none';
+  
+  try {
+    await loadAll();
+    SB.from('users').update({ll:loginTime}).eq('id',usr.id).then(function(){}).catch(function(){});
+    addLog('login', 'logged in', 'Role: ' + rll(usr.role));
+  } catch(e) { console.warn('Post-login sync failed:', e); }
 
-  addLog('login','logged in','Role: '+rll(usr.role));
   refreshSB();
-  var lp=document.getElementById('loginPg'); if(lp) lp.style.display='none';
-  document.getElementById('shell').classList.add('on');
+  
+  // Force Shell Display
+  var lp = document.getElementById('loginPg');
+  if(lp) lp.style.display = 'none';
+  
+  var shell = document.getElementById('shell');
+  shell.style.display = 'flex'; // Force display
+  shell.classList.add('on');
+  
   go('dashboard');
-  try{ setupRealtime(); }catch(e){}
+  
+  showLoader(false);
+  try { setupRealtime(); } catch(e) { console.warn('Realtime skipped'); }
 }
 
 function logout(){
@@ -984,17 +1038,31 @@ function logout(){
   db.customers=[];db.loans=[];db.collections=[];db.partners=[];db.logs=[];
 }
 
-// ── NAV ──────────────────────────────────────────────────────
 function go(page){
   if(!CU) return;
-  if(['users','actlogs'].includes(page)&&!isAdmin()){closeSB();permDenied();setAct(page);return;}
-  if(['partners','profit','audit'].includes(page)&&CU.role==='staff'){closeSB();permDenied();setAct(page);return;}
+  // Make sure this object has 'dashboard: pgDash'
+  var pages = {
+    dashboard: pgDash,
+    customers: pgCust,
+    loans: pgLoans,
+    collections: pgColl,
+    partners: pgPart,
+    profit: pgProfit,
+    audit: pgAudit,
+    reports: pgRep,
+    users: pgUsers,
+    actlogs: pgLogs,
+    backup: pgBackup,
+    settings: pgSet
+  };
+
   setAct(page);
-  document.getElementById('tbtl').textContent=pgNames[page]||page;
-  closeSB(); document.getElementById('gsi').value='';
-  ({dashboard:pgDash,customers:pgCust,loans:pgLoans,collections:pgColl,
-    partners:pgPart,profit:pgProfit,audit:pgAudit,reports:pgRep,users:pgUsers,
-    actlogs:pgLogs,backup:pgBackup,settings:pgSet}[page]||pgDash)();
+  document.getElementById('tbtl').textContent = pgNames[page] || page;
+  closeSB(); 
+  document.getElementById('gsi').value = '';
+  
+  if(pages[page]) pages[page]();
+  else pgDash();
 }
 function setAct(p){
   document.querySelectorAll('.ni').forEach(function(n){n.classList.toggle('on',n.dataset.p===p);});
@@ -1865,89 +1933,6 @@ function payModal(lid){
 }
 // --------------------------------------
 
-function pgDash(){
-  var act=db.loans.filter(function(l){return l.st==='active';}).length;
-  var clo=db.loans.filter(function(l){return l.st==='closed';}).length;
-  var ov=db.loans.filter(function(l){return l.st==='overdue';}).length;
-  var tla=db.loans.reduce(function(s,l){return s+Number(l.amt);},0);
-  var tday=db.collections.filter(function(c){return c.date===td();}).reduce(function(s,c){return s+Number(c.amt);},0);
-  
-  db.loans.forEach(function(l){
-    var isOv = l.sch && l.sch.length ? l.sch.some(function(s){return !s.p && s.d < td();}) : (l.md && l.md < td());
-    if(isOv && l.st==='active'){l.st='overdue'; SB.from('loans').update({st:'overdue'}).eq('id',l.id).then(function(){}); }
-    else if(!isOv && l.st==='overdue'){l.st='active'; SB.from('loans').update({st:'active'}).eq('id',l.id).then(function(){}); }
-  });
-  var ovL=db.loans.filter(function(l){return l.st==='overdue';});
-  var dueTodayL=db.loans.filter(function(l){return l.st!=='closed' && l.sch && l.sch.some(function(s){return !s.p && s.d === td();});});
-  var weekEnd=aD(td(),7);
-  var dueL=db.loans.filter(function(l){return l.st!=='closed' && l.sch && l.sch.some(function(s){return !s.p && s.d > td() && s.d <= weekEnd;});});
-  var topupL=db.loans.filter(function(l){return l.topupOf;});
-  var chitBal=(db.cfg.chit&&db.cfg.chit.chitBalance)||0;
-  var tInv=db.partners.reduce(function(s,p){return s+Number(p.inv);},0);
-  var tCol=db.collections.reduce(function(s,c){return s+Number(c.amt);},0);
-  var tDis=db.loans.reduce(function(s,l){return s+Number(l.dis||0);},0);
-  var cih=tInv+tCol-tDis;
-  var h='';
-  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:12px 14px;background:var(--card);border:1px solid var(--bdr);border-radius:11px">';
-  h+='<div class="ava" style="background:'+CU.col+';width:40px;height:40px;font-size:16px">'+CU.name[0]+'</div>';
-  h+='<div><div style="font-weight:700;font-size:14px">Welcome, '+CU.name.split(' ')[0]+'!</div>';
-  h+='<div style="font-size:11px;color:var(--muted)">'+rll(CU.role)+' - Last login: '+(CU.ll||'First time')+'</div></div>';
-  if(CU.role!=='staff'){h+='<div style="margin-left:auto;display:flex;gap:8px"><button class="btn btn-p" style="font-size:12px;padding:7px 14px" onclick="addLoanM()">+ New Loan</button><button class="btn btn-s" style="font-size:12px;padding:7px 14px" onclick="topUpLoanM()">Top-Up</button></div>';}
-  h+='</div>';
-  h+='<div class="stats">';
-  h+='<div class="stat teal"><div class="stat-lbl">Customers</div><div class="stat-val ct">'+db.customers.length+'</div></div>';
-  h+='<div class="stat green"><div class="stat-lbl">Active Loans</div><div class="stat-val cg">'+act+'</div></div>';
-  h+='<div class="stat blue"><div class="stat-lbl">Closed</div><div class="stat-val cb">'+clo+'</div></div>';
-  h+='<div class="stat red"><div class="stat-lbl">Overdue</div><div class="stat-val cr">'+ov+'</div></div>';
-  h+='<div class="stat gold"><div class="stat-lbl">Total Loans</div><div class="stat-val cgo" style="font-size:15px">'+R(tla)+'</div></div>';
-  h+='<div class="stat orange" style="cursor:pointer" data-dm="collected" onclick="dashModal(this.dataset.dm)"><div class="stat-lbl">Collected Today</div><div class="stat-val co" style="font-size:15px">'+R(tday)+'</div></div>';
-  h+='<div class="stat purple" style="cursor:pointer" data-dm="duetoday" onclick="dashModal(this.dataset.dm)"><div class="stat-lbl">Due Today</div><div class="stat-val cp">'+dueTodayL.length+'</div></div>';
-  h+='<div class="stat teal" style="cursor:pointer" data-dm="topup" onclick="dashModal(this.dataset.dm)"><div class="stat-lbl">Top-Up Loans</div><div class="stat-val ct">'+topupL.length+'</div></div>';
-  if(isAdmin()){h+='<div class="stat green" style="cursor:pointer" data-dm="chit" onclick="dashModal(this.dataset.dm)"><div class="stat-lbl">Chit Fund</div><div class="stat-val cg" style="font-size:14px">'+R(chitBal)+'</div></div>';}
-  h+='<div class="stat '+(cih>=0?'teal':'red')+'" style="cursor:pointer" data-dm="cash" onclick="dashModal(this.dataset.dm)">';
-  h+='<div class="stat-lbl">Cash in Hand</div>';
-  h+='<div class="stat-val '+(cih>=0?'ct':'cr')+'" style="font-size:16px;margin-bottom:6px">'+R(cih)+'</div>';
-  h+='<div style="display:flex;justify-content:space-between;font-size:10px;border-top:1px solid rgba(255,255,255,.15);padding-top:5px">';
-  h+='<div style="text-align:center"><div style="color:var(--muted)">Invested</div><div style="font-weight:700;color:var(--blue)">'+R(tInv)+'</div></div>';
-  h+='<div style="text-align:center"><div style="color:var(--muted)">Disbursed</div><div style="font-weight:700;color:var(--red)">'+R(tDis)+'</div></div>';
-  h+='<div style="text-align:center"><div style="color:var(--muted)">Collected</div><div style="font-weight:700;color:var(--green)">'+R(tCol)+'</div></div>';
-  h+='</div></div>';
-  h+='</div>';
-  h+='<div class="charts"><div class="cbox"><div class="cttl">Monthly Collections</div><div class="cwrap"><canvas id="ch1"></canvas></div></div>';
-  h+='<div class="cbox"><div class="cttl">Loan Types</div><div class="cwrap"><canvas id="ch2"></canvas></div></div>';
-  h+='<div class="cbox"><div class="cttl">Interest Trend</div><div class="cwrap"><canvas id="ch3"></canvas></div></div></div>';
-  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">';
-  h+='<div class="tc"><div class="th"><div class="tt">Overdue ('+ovL.length+')</div></div><div style="padding:10px">';
-  if(!ovL.length){h+='<div class="empty"><p>No overdue loans</p></div>';}
-  else{ovL.forEach(function(l){h+='<div class="alert danger"><div class="alert-b"><strong>'+l.cn+'</strong><small>'+l.id+' - '+R(Math.max(0,l.amt-(l.col||0)))+' pending</small></div><button class="btn btn-sm btn-d" data-lid="'+l.id+'" onclick="payModal(this.dataset.lid)">Pay</button></div>';});}
-  h+='</div></div>';
-  h+='<div class="tc"><div class="th"><div class="tt">Due This Week ('+dueL.length+')</div></div><div style="padding:10px">';
-  if(!dueL.length){h+='<div class="empty"><p>None due soon</p></div>';}
-  else{dueL.forEach(function(l){
-    var nextDue = l.sch ? l.sch.find(function(s){return !s.p;}) : null;
-    var dueStr = nextDue ? nextDue.d : l.md;
-    h+='<div class="alert warn"><div class="alert-b"><strong>'+l.cn+'</strong><small>'+l.id+' - Due: '+dueStr+'</small></div><button class="btn btn-sm btn-p" data-lid="'+l.id+'" onclick="payModal(this.dataset.lid)">Pay</button></div>';
-  });}
-  h+='</div></div>';
-  h+='<div class="tc"><div class="th"><div class="tt">Recent Loans</div><button class="btn btn-sm btn-p" onclick="go(\'loans\')">All</button></div><div style="padding:8px">';
-  var rl=db.loans.slice().reverse().slice(0,5);
-  if(!rl.length){h+='<div class="empty"><p>No loans yet</p></div>';}
-  else{rl.forEach(function(l){var c2=db.collections.filter(function(x){return x.lid===l.id;}).reduce(function(s,x){return s+Number(x.amt);},0);var b2=Math.max(0,l.amt-c2);h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--bdr)"><div><div style="font-size:12px;font-weight:600">'+l.cn+(l.topupOf?' [TU]':'')+'</div><div style="font-size:10px;color:var(--muted)">'+l.id+' - '+ltl(l.tp)+' - '+l.sd+'</div></div><div style="text-align:right"><div class="am" style="font-size:12px">'+R(l.amt)+'</div><div style="font-size:10px;color:'+(b2>0?'var(--red)':'var(--green)')+'">Bal: '+R(b2)+'</div></div></div>';});}
-  h+='</div></div>';
-  h+='<div class="tc"><div class="th"><div class="tt">Recent Activity</div><button class="btn btn-sm btn-s" onclick="go(\'actlogs\')">All</button></div><div style="padding:0 12px 8px">';
-  db.logs.slice(0,6).forEach(function(l){h+='<div class="log-row"><div class="ava" style="background:'+l.col+';width:28px;height:28px;font-size:11px;flex-shrink:0">'+l.name[0]+'</div><div class="log-b"><div class="log-msg"><strong>'+l.name.split(' ')[0]+'</strong> '+l.msg+'<span class="log-tag lt-'+l.action+'">'+l.action+'</span></div><div class="log-meta">'+l.ts+'</div></div></div>';});
-  h+='</div></div></div>';
-  document.getElementById('pg').innerHTML=h;
-  setTimeout(function(){
-    var mo=['J','F','M','A','M','J','J','A','S','O','N','D'];
-    var md=Array(12).fill(0);db.collections.forEach(function(c){md[new Date(c.date).getMonth()]+=Number(c.amt);});
-    new Chart(document.getElementById('ch1'),{type:'bar',data:{labels:mo,datasets:[{data:md,backgroundColor:'rgba(0,212,170,.5)',borderColor:'var(--teal)',borderWidth:1,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8a9bbf',font:{size:9}},grid:{color:'rgba(255,255,255,.025)'}},y:{ticks:{color:'#8a9bbf',font:{size:9},callback:function(v){return v.toLocaleString('en-IN');}},grid:{color:'rgba(255,255,255,.05)'}}}}});
-    var tc={};db.loans.forEach(function(l){tc[l.tp]=(tc[l.tp]||0)+1;});
-    new Chart(document.getElementById('ch2'),{type:'doughnut',data:{labels:Object.keys(tc).map(ltl),datasets:[{data:Object.values(tc),backgroundColor:['#00d4aa','#f5c842','#0099ff','#ff6b35','#c864ff'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8a9bbf',font:{size:10},padding:8,boxWidth:10}}}}});
-    var pd=Array(12).fill(0);db.loans.forEach(function(l){pd[new Date(l.on||td()).getMonth()]+=Number(l.int||0);});
-    new Chart(document.getElementById('ch3'),{type:'line',data:{labels:mo,datasets:[{data:pd,borderColor:'#f5c842',backgroundColor:'rgba(245,200,66,.1)',fill:true,tension:.4,pointBackgroundColor:'#f5c842',pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8a9bbf',font:{size:9}},grid:{display:false}},y:{ticks:{color:'#8a9bbf',font:{size:9},callback:function(v){return v.toLocaleString('en-IN');}},grid:{color:'rgba(255,255,255,.05)'}}}}});
-  },80);
-}
 function pgLogs(fa='',fu=''){
   if(!isAdmin()){permDenied();return;}
   let logs=db.logs;
