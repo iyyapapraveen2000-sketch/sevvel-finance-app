@@ -47,8 +47,23 @@
   --glow-p:   0 0 20px rgba(139,92,246,.2);
 }
 
-html,body{height:100%;overflow:hidden;font-family:var(--ff);background:var(--bg);color:var(--txt);font-size:14px;-webkit-font-smoothing:antialiased;}
-
+/* Update your existing html, body block to this: */
+html, body {
+  height: 100%;
+  width: 100%;
+  font-family: var(--ff);
+  background: var(--bg);
+  color: var(--txt);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  
+  /* ADD THESE THREE LINES: */
+  overflow-y: auto;          /* Allows the page to scroll vertically */
+  overflow-x: hidden;        /* Prevents weird side-to-side scrolling */
+  -webkit-overflow-scrolling: touch; /* Smooth kinetic scrolling for iPhone/Android */
+  /* Prevents the browser from zooming in when you tap an input field */
+  touch-action: manipulation;
+}
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
@@ -165,7 +180,20 @@ html,body{height:100%;overflow:hidden;font-family:var(--ff);background:var(--bg)
 .logout-btn:hover{background:rgba(255,71,87,.1);color:var(--red);border-color:rgba(255,71,87,.3);}
 
 /* ── MAIN ── */
-.main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;}
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto; /* Ensure the main area can scroll */
+}
+
+.pg {
+  flex: 1;
+  padding: 20px;
+  background: var(--bg);
+  min-height: 100%; /* Ensure the page grows with content */
+}
 .topbar{
   height: calc(var(--top-h) + env(safe-area-inset-top)); 
   padding-top: env(safe-area-inset-top);
@@ -209,7 +237,23 @@ html,body{height:100%;overflow:hidden;font-family:var(--ff);background:var(--bg)
 .ssu{font-size:13px;color:var(--muted);margin-top:2px;}
 
 /* ── STAT CARDS ── */
-.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.stats {
+  display: grid;
+  /* This ensures 2 columns on phones, and more on desktops */
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.charts {
+  display: grid;
+  /* Force 1 column on phones to prevent horizontal scrolling */
+  grid-template-columns: 1fr; 
+  gap: 14px;
+  margin-bottom: 20px;
+  width: 100%;
+}
 .stat{
   background:var(--card);border:1px solid var(--bdr);border-radius:var(--rad);
   padding:16px;position:relative;overflow:hidden;transition:all .2s;
@@ -371,7 +415,14 @@ select option{background:var(--card);}
 .lt-user{background:rgba(139,92,246,.15);color:var(--purple);}
 
 /* ── CHARTS ── */
-.charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:20px;}
+.charts {
+  display: grid;
+  /* Force 1 column on phones to prevent horizontal scrolling */
+  grid-template-columns: 1fr; 
+  gap: 14px;
+  margin-bottom: 20px;
+  width: 100%;
+}
 .cbox{background:var(--card);border:1px solid var(--bdr);border-radius:var(--rad);padding:18px;}
 .cttl{font-size:13px;font-weight:700;margin-bottom:14px;color:var(--muted);}
 .cwrap{height:180px;position:relative;}
@@ -445,8 +496,23 @@ select option{background:var(--card);}
 
 /* ── RESPONSIVE ── */
 @media(max-width:768px){
-  .stats{grid-template-columns:repeat(2,1fr);}
-  .charts{grid-template-columns:1fr;}
+  .stats {
+  display: grid;
+  /* This ensures 2 columns on phones, and more on desktops */
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.charts {
+  display: grid;
+  /* Force 1 column on phones to prevent horizontal scrolling */
+  grid-template-columns: 1fr; 
+  gap: 14px;
+  margin-bottom: 20px;
+  width: 100%;
+}
   .ugrid{grid-template-columns:1fr;}
   .welcome-actions{display:none;}
   .tb-srch{display:none;}
