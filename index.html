@@ -331,15 +331,31 @@ select option{background:var(--card);}
 .tst.warn{background:rgba(245,200,66,.15);border:1px solid rgba(245,200,66,.3);color:var(--gold);}
 @keyframes slideIn{from{transform:translateX(100%);opacity:0;}to{transform:none;opacity:1;}}
 
-/* ── MODAL ── */
-.mwrap{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:none;}
-.mwrap.on{display:flex;}
-.modal{
-  background:var(--card);border:1px solid var(--bdr2);border-radius:20px;
-  width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;
-  box-shadow:var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.06);
-  animation:popIn .25s cubic-bezier(.34,1.56,.64,1);
-  margin:16px;
+/* ── MODAL FIX FOR IOS PWA ── */
+.mwrap {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 999999 !important; /* Force to the very top of everything */
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  /* Ensure the modal is not pushed off by the notch */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.modal {
+  background: var(--card);
+  width: 95% !important; /* Use slightly more width on mobile */
+  max-width: 560px;
+  max-height: 80vh !important; /* Limit height so it doesn't hit the bottom bar */
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  margin: auto;
 }
 @keyframes popIn{from{transform:scale(.94);opacity:0;}to{transform:none;opacity:1;}}
 .mhd{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--bdr);}
@@ -3011,7 +3027,14 @@ function pgSet(){
   +'</div>';
   document.getElementById('pg').innerHTML=html;
 }
-
+// --- FIX FOR IOS KEYBOARD AND MODAL RE-SIZING ---
+window.addEventListener('resize', function() {
+  var modal = document.querySelector('.modal');
+  if (modal && document.getElementById('mwrap').classList.contains('on')) {
+    // Force recalculation if screen resizes (e.g. keyboard pops up)
+    modal.style.maxHeight = (window.innerHeight * 0.8) + 'px';
+  }
+});
 </script>
 </body>
 </html>
